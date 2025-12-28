@@ -1,0 +1,1 @@
+export const WS_API = 'ws://127.0.0.1:8080';
