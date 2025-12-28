@@ -1,17 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three'; // If you see type errors, run: npm i --save-dev @types/three
 import Joypad from './Joypad';
 import ActionPad from './ActionPad';
 import DamageFloater from './DamageFloater';
+import EditItemModal from './modal/EditItem';
+import EditMapModal from './modal/EditMap';
+import EditNpcModal from './modal/EditNpc';
+import EditSkillModal from './modal/EditSkill';
 import { WS_API } from '@/env';
 
 
 type GameScreenProps = {
   username: string;
   onLogout: () => void;
+  role?: string;
 };
 
 type DamageType = {
@@ -22,13 +27,101 @@ type DamageType = {
   is_critical: boolean;
 };
 
-export default function GameScreen({ username, onLogout }: GameScreenProps) {
+type ItemType = {
+  id?: number;
+  name: string;
+  description: string;
+  type: 'weapon' | 'armor' | 'consumable' | 'material';
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  value: number;
+  stackable: boolean;
+  max_stack?: number;
+  stats?: {
+    attack?: number;
+    defense?: number;
+    hp?: number;
+    mp?: number;
+  };
+};
+
+type MapType = {
+  id?: number;
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  tiles: any[];
+  spawn_points: { x: number; y: number }[];
+  npcs: { id: number; x: number; y: number }[];
+  monsters: { template_id: number; x: number; y: number }[];
+};
+
+type NpcType = {
+  id?: number;
+  name: string;
+  description: string;
+  sprite_id: string;
+  level: number;
+  hp: number;
+  max_hp: number;
+  attack: number;
+  defense: number;
+  move_speed: number;
+  is_hostile: boolean;
+  can_trade: boolean;
+  can_quest: boolean;
+  dialogue: any[];
+  shop_items?: number[];
+  quests?: number[];
+  position: { x: number; y: number };
+  map_id?: number;
+};
+
+type SkillType = {
+  id?: number;
+  name: string;
+  description: string;
+  icon_id?: string;
+  skill_type: 'active' | 'passive';
+  element: 'none' | 'fire' | 'ice' | 'lightning' | 'earth' | 'wind' | 'light' | 'dark';
+  level_required: number;
+  mp_cost: number;
+  cooldown: number;
+  cast_time: number;
+  range: number;
+  area_of_effect: number;
+  effects: any[];
+  learnable_by: string[];
+};
+
+export default function GameScreen({ username, onLogout, role = 'user' }: GameScreenProps) {
   const rendererRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const facingDir = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const [damages, setDamages] = useState<DamageType[]>([]);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  
+  // Modal states
+  const [showEditItem, setShowEditItem] = useState(false);
+  const [showEditMap, setShowEditMap] = useState(false);
+  const [showEditNpc, setShowEditNpc] = useState(false);
+  const [showEditSkill, setShowEditSkill] = useState(false);
+  
+  // Edit modes
+  const [itemEditMode, setItemEditMode] = useState<'create' | 'edit'>('create');
+  const [mapEditMode, setMapEditMode] = useState<'create' | 'edit'>('create');
+  const [npcEditMode, setNpcEditMode] = useState<'create' | 'edit'>('create');
+  const [skillEditMode, setSkillEditMode] = useState<'create' | 'edit'>('create');
+  
+  // Current editing items
+  const [currentItem, setCurrentItem] = useState<ItemType | undefined>();
+  const [currentMap, setCurrentMap] = useState<MapType | undefined>();
+  const [currentNpc, setCurrentNpc] = useState<NpcType | undefined>();
+  const [currentSkill, setCurrentSkill] = useState<SkillType | undefined>();
+
+  const isAdmin = role === 'admin' || role === 'moderator';
 
   useEffect(() => {
     wsRef.current = new WebSocket(WS_API);
@@ -48,6 +141,8 @@ export default function GameScreen({ username, onLogout }: GameScreenProps) {
           100,
           true
         );
+      } else if (data.type === 'role_update') {
+        // Role updated from server
       }
     };
     }, [username]);
@@ -93,9 +188,117 @@ export default function GameScreen({ username, onLogout }: GameScreenProps) {
     render();
   };
 
+  // Admin menu handlers
+  const handleCreateItem = () => {
+    setItemEditMode('create');
+    setCurrentItem(undefined);
+    setShowEditItem(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleEditItem = (item: ItemType) => {
+    setItemEditMode('edit');
+    setCurrentItem(item);
+    setShowEditItem(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleCreateMap = () => {
+    setMapEditMode('create');
+    setCurrentMap(undefined);
+    setShowEditMap(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleEditMap = (map: MapType) => {
+    setMapEditMode('edit');
+    setCurrentMap(map);
+    setShowEditMap(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleCreateNpc = () => {
+    setNpcEditMode('create');
+    setCurrentNpc(undefined);
+    setShowEditNpc(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleEditNpc = (npc: NpcType) => {
+    setNpcEditMode('edit');
+    setCurrentNpc(npc);
+    setShowEditNpc(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleCreateSkill = () => {
+    setSkillEditMode('create');
+    setCurrentSkill(undefined);
+    setShowEditSkill(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleEditSkill = (skill: SkillType) => {
+    setSkillEditMode('edit');
+    setCurrentSkill(skill);
+    setShowEditSkill(true);
+    setShowAdminMenu(false);
+  };
+
+  const handleSaveItem = (item: ItemType) => {
+    console.log('Saving item:', item);
+    // Send to server via WebSocket
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'save_item', item }));
+    }
+    setShowEditItem(false);
+  };
+
+  const handleSaveMap = (map: MapType) => {
+    console.log('Saving map:', map);
+    // Send to server via WebSocket
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'save_map', map }));
+    }
+    setShowEditMap(false);
+  };
+
+  const handleSaveNpc = (npc: NpcType) => {
+    console.log('Saving npc:', npc);
+    // Send to server via WebSocket
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'save_npc', npc }));
+    }
+    setShowEditNpc(false);
+  };
+
+  const handleSaveSkill = (skill: SkillType) => {
+    console.log('Saving skill:', skill);
+    // Send to server via WebSocket
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'save_skill', skill }));
+    }
+    setShowEditSkill(false);
+  };
+
   return (
     <View style={styles.container}>
       <GLView style={styles.glView} onContextCreate={onContextCreate} />
+      
+      {/* Admin Menu Button */}
+      {isAdmin && (
+        <TouchableOpacity style={styles.adminButton} onPress={() => setShowAdminMenu(true)}>
+          <Text style={styles.adminButtonText}>⚙️ Admin</Text>
+        </TouchableOpacity>
+      )}
+      
+      {/* User Info */}
+      <View style={styles.userInfo}>
+        <Text style={styles.userInfoText}>{username}</Text>
+        <Text style={[styles.roleText, role === 'admin' && styles.adminRoleText]}>
+          {role.toUpperCase()}
+        </Text>
+      </View>
       
       {damages.map(d => (
         <DamageFloater
@@ -113,6 +316,92 @@ export default function GameScreen({ username, onLogout }: GameScreenProps) {
       </View>
       
       <ActionPad onAttack={handleAttack} />
+
+      {/* Admin Menu Modal */}
+      <Modal visible={showAdminMenu} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.adminModal}>
+            <View style={styles.adminModalHeader}>
+              <Text style={styles.adminModalTitle}>Admin Menu</Text>
+              <TouchableOpacity onPress={() => setShowAdminMenu(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.adminModalContent}>
+              <Text style={styles.sectionTitle}>Items</Text>
+              <TouchableOpacity style={styles.menuButton} onPress={handleCreateItem}>
+                <Text style={styles.menuButtonText}>+ Create New Item</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditItem(true)}>
+                <Text style={styles.menuButtonText}>📋 View/Edit Items</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>Maps</Text>
+              <TouchableOpacity style={styles.menuButton} onPress={handleCreateMap}>
+                <Text style={styles.menuButtonText}>+ Create New Map</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditMap(true)}>
+                <Text style={styles.menuButtonText}>🗺️ View/Edit Maps</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>NPCs</Text>
+              <TouchableOpacity style={styles.menuButton} onPress={handleCreateNpc}>
+                <Text style={styles.menuButtonText}>+ Create New NPC</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditNpc(true)}>
+                <Text style={styles.menuButtonText}>👤 View/Edit NPCs</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>Skills</Text>
+              <TouchableOpacity style={styles.menuButton} onPress={handleCreateSkill}>
+                <Text style={styles.menuButtonText}>+ Create New Skill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditSkill(true)}>
+                <Text style={styles.menuButtonText}>⚡ View/Edit Skills</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>Account</Text>
+              <TouchableOpacity style={[styles.menuButton, styles.logoutButton]} onPress={onLogout}>
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Modals */}
+      <EditItemModal
+        visible={showEditItem}
+        onClose={() => setShowEditItem(false)}
+        item={currentItem}
+        onSave={handleSaveItem}
+        mode={itemEditMode}
+      />
+
+      <EditMapModal
+        visible={showEditMap}
+        onClose={() => setShowEditMap(false)}
+        map={currentMap}
+        onSave={handleSaveMap}
+        mode={mapEditMode}
+      />
+
+      <EditNpcModal
+        visible={showEditNpc}
+        onClose={() => setShowEditNpc(false)}
+        npc={currentNpc}
+        onSave={handleSaveNpc}
+        mode={npcEditMode}
+      />
+
+      <EditSkillModal
+        visible={showEditSkill}
+        onClose={() => setShowEditSkill(false)}
+        skill={currentSkill}
+        onSave={handleSaveSkill}
+        mode={skillEditMode}
+      />
     </View>
   );
 }
@@ -120,5 +409,122 @@ export default function GameScreen({ username, onLogout }: GameScreenProps) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   glView: { flex: 1 },
-  leftControls: { position: 'absolute', bottom: 50, left: 50 }
+  leftControls: { position: 'absolute', bottom: 50, left: 50 },
+  
+  // Admin Button
+  adminButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  adminButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  
+  // User Info
+  userInfo: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  userInfoText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  roleText: {
+    color: '#a0a0a0',
+    fontSize: 12,
+  },
+  adminRoleText: {
+    color: '#f59e0b',
+    fontWeight: 'bold',
+  },
+  
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adminModal: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  adminModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  adminModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ff4757',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  adminModalContent: {
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#a0a0a0',
+    marginTop: 16,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  menuButton: {
+    backgroundColor: '#2a2a4e',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  menuButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
+    marginTop: 8,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
