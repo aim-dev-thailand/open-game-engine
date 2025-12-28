@@ -12,13 +12,13 @@ export default function LoginPage({ username, setUsername, setRole, setIsInGame 
         <View style={styles.container}>
             <Text style={styles.title}>RPG MMORPG</Text>
             <TextInput
-                placeholder="Username"
+                placeholder="ชื่อผู้ใช้"
                 value={username}
                 onChangeText={setUsername}
                 style={styles.input}
             />
-            <Button title="Login" onPress={() => {
-                setRole('user'); // Default role, can be changed by admin command
+            <Button title="เข้าสู่ระบบ" onPress={() => {
+                setRole('user'); // บทบาทเริ่มต้น สามารถเปลี่ยนได้โดยคำสั่งผู้ดูแล
                 setIsInGame(true);
             }} />
         </View>

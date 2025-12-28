@@ -9,6 +9,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
 // --- Structures ---
+// โครงสร้าง (Structures)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub id: String,
@@ -56,21 +57,21 @@ pub struct MonsterInstance {
     pub max_hp: i32,
 }
 
-// --- Database & Memory ---
+// --- ฐานข้อมูลและหน่วยความจำ (Database & Memory) ---
 type PlayersMap = Arc<DashMap<String, PlayerState>>;
 type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
 
-// --- Main Function ---
+// --- ฟังก์ชันหลัก (Main Function) ---
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = "postgres://appadmin:A%24hi%24%40n%2301@10.8.0.1:25432/mmorpg_db";
     let pool = PgPool::connect(database_url).await?;
 
-    // Init In-Memory Data
+    // กำหนดข้อมูลในหน่วยความจำ (Init In-Memory Data)
     let players: PlayersMap = Arc::new(DashMap::new());
     let monsters: MonstersMap = Arc::new(DashMap::new());
 
-    // Spawn Background Tasks
+    // สร้างงานพื้นหลัง (Spawn Background Tasks)
     let pool_clone = pool.clone();
     let players_clone = players.clone();
     tokio::spawn(async move {
@@ -87,9 +88,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         admin_command_loop(players_clone).await;
     });
 
-    // WebSocket Server
+    // เซิร์ฟเวอร์ WebSocket (WebSocket Server)
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
-    println!("Server running on ws://0.0.0.0:8080");
+    println!("เซิร์ฟเวอร์ทำงานที่ ws://0.0.0.0:8080");
 
     while let Ok((stream, addr)) = listener.accept().await {
         let ws_stream = tokio_tungstenite::accept_async(stream).await?;
@@ -103,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// --- Client Handler ---
+// --- ตัวจัดการลูกค้า (Client Handler) ---
 async fn handle_client(
     ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     players: PlayersMap,
@@ -118,7 +119,7 @@ async fn handle_client(
                 if let Ok(data) = serde_json::from_str::<serde_json::Value>(&text) {
                     match data["type"].as_str() {
                         Some("login") => {
-                            // Logic: Validate User, Create PlayerState
+                            // ตรวจสอบผู้ใช้และสร้าง PlayerState (Logic: Validate User, Create PlayerState)
                             let username = data["username"].as_str().unwrap_or("Unknown");
                             player_id = uuid::Uuid::new_v4().to_string();
                             
@@ -136,21 +137,59 @@ async fn handle_client(
                             };
                             players.insert(player_id.clone(), new_player);
                             
-                            // Send Init Data back
+                            // ส่งข้อมูลเริ่มต้นกลับ (Send Init Data back)
                             let _ = ws.send(Message::Text(serde_json::json!({"type": "init", "id": player_id}).to_string()));
                         }
                         Some("move") => {
-                            // Update Position in memory
+                            // อัปเดตตำแหน่งในหน่วยความจำ (Update Position in memory)
                             if let Some(mut p) = players.get_mut(&player_id) {
                                 p.x = data["x"].as_f64().unwrap() as f32;
                                 p.y = data["y"].as_f64().unwrap() as f32;
                             }
                         }
                         Some("attack") => {
+                            // โจมตี (Attack)
                             handle_attack(&player_id, &players, &monsters);
                         }
                         Some("cast_skill") => {
-                            // Handle Skill Logic
+                            // จัดการสกิล (Handle Skill Logic)
+                        }
+                        Some("save_item") => {
+                            // บันทึกไอเทม (Handle save item logic)
+                            break;
+                        }
+                        Some("save_npc") => {
+                            // บันทึก NPC (Handle save npc logic)
+                            break;
+                        }
+                        Some("save_skill") => {
+                            // บันทึกสกิล (Handle save skill logic)
+                            break;
+                        }
+                        Some("save_map") => {
+                            // บันทึกแผนที่ (Handle save map logic)
+                            break;
+                        }
+                        Some("load_item") => {
+                            // โหลดไอเทม (Handle load item logic)
+                            break;
+                        }
+                        Some("load_npc") => {
+                            // โหลด NPC (Handle load npc logic)
+                            break;
+                        }
+                        Some("load_skill") => {
+                            // โหลดสกิล (Handle load skill logic)
+                            break;
+                        }
+                        Some("load_map") => {
+                            // โหลดแผนที่ (Handle load map logic)
+                            break;
+                        }
+                        Some("logout") => {
+                            // ออกจากระบบ (Logout)
+                            players.remove(&player_id);
+                            break;
                         }
                         _ => {}
                     }
@@ -160,32 +199,32 @@ async fn handle_client(
     }
 }
 
-// --- Logic Functions ---
+// --- ฟังก์ชันตรรกะ (Logic Functions) ---
 
 fn handle_attack(player_id: &str, players: &PlayersMap, monsters: &MonstersMap) {
     if let Some(attacker) = players.get(player_id) {
-        // Find nearest monster (Mock logic)
+        // ค้นหามอนสเตอร์ที่ใกล้ที่สุด (Mock logic) (Find nearest monster)
         if let Some(monster_ref) = monsters.iter().next() {
             let monster = monster_ref.value();
-            // Calc Damage
+            // คำนวณดเมจ (Calc Damage)
             let is_crit = rand::random::<f32>() < attacker.crit_rate;
             let mut dmg = attacker.base_atk;
             if is_crit { dmg = (dmg as f32 * 1.5) as i32; }
             
-            // Send result back (In real app, broadcast to all)
-            // Here we just mock print
-            println!("Hit monster {} for {} dmg", monster.uuid, dmg);
+            // ส่งผลลัพธ์กลับ (แอปพลิเคชันจริงจะส่งไปยังลูกค้า) (Send result back)
+            // ที่นี่เราแค่พิมพ์ออก (Here we just mock print)
+            println!("โจมตีมอนสเตอร์ {} ได้ {} ดเมจ", monster.uuid, dmg);
         }
     }
 }
 
-// --- Background Loops ---
+// --- ลูปพื้นหลัง (Background Loops) ---
 
 async fn save_loop(pool: PgPool, players: PlayersMap) {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 mins
     loop {
         interval.tick().await;
-        println!("Saving players to DB...");
+        println!("กำลังบันทึกข้อมูลผู้เล่นลงฐานข้อมูล...");
         // Implementation of SQL Update here
     }
 }
@@ -198,6 +237,7 @@ async fn status_effect_loop(players: PlayersMap) {
 }
 
 async fn admin_command_loop(players: PlayersMap) {
+    // ลูปคำสั่งผู้ดูแล (Admin command loop)
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin).lines();
     
@@ -210,26 +250,26 @@ async fn admin_command_loop(players: PlayersMap) {
                 if parts.len() == 3 {
                     let username = parts[1];
                     let role = parts[2];
-                    println!("Promoting {} to {}", username, role);
-                    // Find player by username and update role
+                    println!("กำลังเลื่อนขั้นบทบาท {} เป็น {}", username, role);
+                    // ค้นหาผู้เล่นตามชื่อและอัปเดตบทบาท (Find player by username and update role)
                 } else {
-                    println!("Usage: promote <username> <role>");
+                    println!("วิธีใช้: promote <username> <role>");
                 }
             }
             "warp" => {
-                // Logic: Warp player to x, y
+                // ตรรกะ: วาร์ปผู้เล่นไปยังตำแหน่ง x, y (Logic: Warp player to x, y)
                 if parts.len() == 5 {
                     let username = parts[1];
                     let mapId = parts[2].parse::<i32>().unwrap_or(0);
                     let x = parts[3].parse::<f32>().unwrap_or(0.0);
                     let y = parts[4].parse::<f32>().unwrap_or(0.0);
-                    println!("Warping {} to map {} ({}, {})", username, mapId, x, y);
-                    // Find player by username and update position
+                    println!("กำลังวาร์ป {} ไปยังแผนที่ {} ({}, {})", username, mapId, x, y);
+                    // ค้นหาผู้เล่นตามชื่อและอัปเดตตำแหน่ง (Find player by username and update position)
                 } else {
-                    println!("Warping: warp <username> <mapId> <x> <y>");
+                    println!("วิธีใช้: warp <username> <mapId> <x> <y>");
                 }
             }
-            _ => println!("Unknown admin command"),
+            _ => println!("คำสั่งผู้ดูแลไม่รู้จัก"),
         }
     }
 }

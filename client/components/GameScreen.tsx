@@ -3,13 +3,13 @@ import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three'; // If you see type errors, run: npm i --save-dev @types/three
-import Joypad from './Joypad';
-import ActionPad from './ActionPad';
-import DamageFloater from './DamageFloater';
-import EditItemModal from './modal/EditItem';
-import EditMapModal from './modal/EditMap';
-import EditNpcModal from './modal/EditNpc';
-import EditSkillModal from './modal/EditSkill';
+import Joypad from './ui/Joypad';
+import ActionPad from './ui/ActionPad';
+import DamageFloater from './ui/DamageFloater';
+import EditItemModal from './modal/edit/EditItem';
+import EditMapModal from './modal/edit/EditMap';
+import EditNpcModal from './modal/edit/EditNpc';
+import EditSkillModal from './modal/edit/EditSkill';
 import { WS_API } from '@/env';
 
 
@@ -288,7 +288,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
       {/* Admin Menu Button */}
       {isAdmin && (
         <TouchableOpacity style={styles.adminButton} onPress={() => setShowAdminMenu(true)}>
-          <Text style={styles.adminButtonText}>⚙️ Admin</Text>
+          <Text style={styles.adminButtonText}>⚙️ ผู้ดูแล</Text>
         </TouchableOpacity>
       )}
       
@@ -296,7 +296,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
       <View style={styles.userInfo}>
         <Text style={styles.userInfoText}>{username}</Text>
         <Text style={[styles.roleText, role === 'admin' && styles.adminRoleText]}>
-          {role.toUpperCase()}
+          {role === 'admin' ? 'ผู้ดูแล' : role === 'moderator' ? 'ผู้ควบคุม' : 'ผู้ใช้'}
         </Text>
       </View>
       
@@ -322,7 +322,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
         <View style={styles.modalOverlay}>
           <View style={styles.adminModal}>
             <View style={styles.adminModalHeader}>
-              <Text style={styles.adminModalTitle}>Admin Menu</Text>
+              <Text style={styles.adminModalTitle}>เมนูผู้ดูแล</Text>
               <TouchableOpacity onPress={() => setShowAdminMenu(false)} style={styles.closeButton}>
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
@@ -331,39 +331,39 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
             <ScrollView style={styles.adminModalContent}>
               <Text style={styles.sectionTitle}>Items</Text>
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateItem}>
-                <Text style={styles.menuButtonText}>+ Create New Item</Text>
+                <Text style={styles.menuButtonText}>+ สร้างไอเทมใหม่</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditItem(true)}>
-                <Text style={styles.menuButtonText}>📋 View/Edit Items</Text>
+                <Text style={styles.menuButtonText}>📋 ดู/แก้ไขไอเทม</Text>
               </TouchableOpacity>
 
               <Text style={styles.sectionTitle}>Maps</Text>
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateMap}>
-                <Text style={styles.menuButtonText}>+ Create New Map</Text>
+                <Text style={styles.menuButtonText}>+ สร้างแผนที่ใหม่</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditMap(true)}>
-                <Text style={styles.menuButtonText}>🗺️ View/Edit Maps</Text>
+                <Text style={styles.menuButtonText}>🗺️ ดู/แก้ไขแผนที่</Text>
               </TouchableOpacity>
 
               <Text style={styles.sectionTitle}>NPCs</Text>
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateNpc}>
-                <Text style={styles.menuButtonText}>+ Create New NPC</Text>
+                <Text style={styles.menuButtonText}>+ สร้าง NPC ใหม่</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditNpc(true)}>
-                <Text style={styles.menuButtonText}>👤 View/Edit NPCs</Text>
+                <Text style={styles.menuButtonText}>👤 ดู/แก้ไข NPCs</Text>
               </TouchableOpacity>
 
               <Text style={styles.sectionTitle}>Skills</Text>
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateSkill}>
-                <Text style={styles.menuButtonText}>+ Create New Skill</Text>
+                <Text style={styles.menuButtonText}>+ สร้างสกิลใหม่</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditSkill(true)}>
-                <Text style={styles.menuButtonText}>⚡ View/Edit Skills</Text>
+                <Text style={styles.menuButtonText}>⚡ ดู/แก้ไขสกิล</Text>
               </TouchableOpacity>
 
               <Text style={styles.sectionTitle}>Account</Text>
               <TouchableOpacity style={[styles.menuButton, styles.logoutButton]} onPress={onLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
+                <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
