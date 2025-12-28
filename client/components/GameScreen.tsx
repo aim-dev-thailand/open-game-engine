@@ -10,6 +10,10 @@ import EditItemModal from './modal/edit/EditItem';
 import EditMapModal from './modal/edit/EditMap';
 import EditNpcModal from './modal/edit/EditNpc';
 import EditSkillModal from './modal/edit/EditSkill';
+import ItemList from './modal/list/ItemList';
+import SkillList from './modal/list/SkillList';
+import NpcList from './modal/list/NpcList';
+import MapList from './modal/list/MapList';
 import { WS_API } from '@/env';
 
 
@@ -103,7 +107,13 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
   const [damages, setDamages] = useState<DamageType[]>([]);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   
-  // Modal states
+  // List modal states
+  const [showItemList, setShowItemList] = useState(false);
+  const [showSkillList, setShowSkillList] = useState(false);
+  const [showNpcList, setShowNpcList] = useState(false);
+  const [showMapList, setShowMapList] = useState(false);
+  
+  // Edit modal states
   const [showEditItem, setShowEditItem] = useState(false);
   const [showEditMap, setShowEditMap] = useState(false);
   const [showEditNpc, setShowEditNpc] = useState(false);
@@ -143,6 +153,14 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
         );
       } else if (data.type === 'role_update') {
         // Role updated from server
+      } else if (data.type === 'items_loaded') {
+        console.log('ไอเทมโหลดแล้ว:', data.items);
+      } else if (data.type === 'skills_loaded') {
+        console.log('สกิลโหลดแล้ว:', data.skills);
+      } else if (data.type === 'npcs_loaded') {
+        console.log('NPC โหลดแล้ว:', data.npcs);
+      } else if (data.type === 'maps_loaded') {
+        console.log('แผนที่โหลดแล้ว:', data.maps);
       }
     };
     }, [username]);
@@ -333,7 +351,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateItem}>
                 <Text style={styles.menuButtonText}>+ สร้างไอเทมใหม่</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditItem(true)}>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowItemList(true)}>
                 <Text style={styles.menuButtonText}>📋 ดู/แก้ไขไอเทม</Text>
               </TouchableOpacity>
 
@@ -341,7 +359,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateMap}>
                 <Text style={styles.menuButtonText}>+ สร้างแผนที่ใหม่</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditMap(true)}>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowMapList(true)}>
                 <Text style={styles.menuButtonText}>🗺️ ดู/แก้ไขแผนที่</Text>
               </TouchableOpacity>
 
@@ -349,7 +367,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateNpc}>
                 <Text style={styles.menuButtonText}>+ สร้าง NPC ใหม่</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditNpc(true)}>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowNpcList(true)}>
                 <Text style={styles.menuButtonText}>👤 ดู/แก้ไข NPCs</Text>
               </TouchableOpacity>
 
@@ -357,7 +375,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
               <TouchableOpacity style={styles.menuButton} onPress={handleCreateSkill}>
                 <Text style={styles.menuButtonText}>+ สร้างสกิลใหม่</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuButton} onPress={() => setShowEditSkill(true)}>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowSkillList(true)}>
                 <Text style={styles.menuButtonText}>⚡ ดู/แก้ไขสกิล</Text>
               </TouchableOpacity>
 
@@ -401,6 +419,35 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
         skill={currentSkill}
         onSave={handleSaveSkill}
         mode={skillEditMode}
+      />
+
+      {/* List Modals */}
+      <ItemList
+        visible={showItemList}
+        onClose={() => setShowItemList(false)}
+        onEditItem={handleEditItem}
+        wsRef={wsRef}
+      />
+
+      <SkillList
+        visible={showSkillList}
+        onClose={() => setShowSkillList(false)}
+        onEditSkill={handleEditSkill}
+        wsRef={wsRef}
+      />
+
+      <NpcList
+        visible={showNpcList}
+        onClose={() => setShowNpcList(false)}
+        onEditNpc={handleEditNpc}
+        wsRef={wsRef}
+      />
+
+      <MapList
+        visible={showMapList}
+        onClose={() => setShowMapList(false)}
+        onEditMap={handleEditMap}
+        wsRef={wsRef}
       />
     </View>
   );

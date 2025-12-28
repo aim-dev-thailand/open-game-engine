@@ -57,9 +57,82 @@ pub struct MonsterInstance {
     pub max_hp: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ItemData {
+    pub id: Option<i32>,
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub rarity: String,
+    pub value: i32,
+    pub stackable: bool,
+    pub max_stack: Option<i32>,
+    pub stats: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MapData {
+    pub id: Option<i32>,
+    pub name: String,
+    pub description: String,
+    pub width: i32,
+    pub height: i32,
+    pub tiles: serde_json::Value,
+    pub spawn_points: Vec<serde_json::Value>,
+    pub npcs: Vec<serde_json::Value>,
+    pub monsters: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NpcData {
+    pub id: Option<i32>,
+    pub name: String,
+    pub description: String,
+    pub sprite_id: String,
+    pub level: i32,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub attack: i32,
+    pub defense: i32,
+    pub move_speed: f32,
+    pub is_hostile: bool,
+    pub can_trade: bool,
+    pub can_quest: bool,
+    pub dialogue: Vec<serde_json::Value>,
+    pub shop_items: Option<Vec<i32>>,
+    pub quests: Option<Vec<i32>>,
+    pub position: serde_json::Value,
+    pub map_id: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillData {
+    pub id: Option<i32>,
+    pub name: String,
+    pub description: String,
+    pub icon_id: Option<String>,
+    #[serde(rename = "type")]
+    pub skill_type: String,
+    pub element: String,
+    pub level_required: i32,
+    pub mp_cost: i32,
+    pub cooldown: i32,
+    pub cast_time: f32,
+    pub range: f32,
+    #[serde(rename = "area_of_effect")]
+    pub area_of_effect: f32,
+    pub effects: Vec<serde_json::Value>,
+    pub learnable_by: Vec<String>,
+}
+
 // --- ฐานข้อมูลและหน่วยความจำ (Database & Memory) ---
 type PlayersMap = Arc<DashMap<String, PlayerState>>;
 type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
+type ItemsMap = Arc<DashMap<i32, ItemData>>;
+type MapsMap = Arc<DashMap<i32, MapData>>;
+type NpcsMap = Arc<DashMap<i32, NpcData>>;
+type SkillsMap = Arc<DashMap<i32, SkillData>>;
 
 // --- ฟังก์ชันหลัก (Main Function) ---
 #[tokio::main]
@@ -70,12 +143,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // กำหนดข้อมูลในหน่วยความจำ (Init In-Memory Data)
     let players: PlayersMap = Arc::new(DashMap::new());
     let monsters: MonstersMap = Arc::new(DashMap::new());
+    let items: ItemsMap = Arc::new(DashMap::new());
+    let maps: MapsMap = Arc::new(DashMap::new());
+    let npcs: NpcsMap = Arc::new(DashMap::new());
+    let skills: SkillsMap = Arc::new(DashMap::new());
 
     // สร้างงานพื้นหลัง (Spawn Background Tasks)
     let pool_clone = pool.clone();
     let players_clone = players.clone();
+    let items_clone = items.clone();
+    let maps_clone = maps.clone();
+    let npcs_clone = npcs.clone();
+    let skills_clone = skills.clone();
     tokio::spawn(async move {
-        save_loop(pool_clone, players_clone).await;
+        save_loop(pool_clone, players_clone, items_clone, maps_clone, npcs_clone, skills_clone).await;
     });
 
     let players_clone = players.clone();
@@ -84,8 +165,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let players_clone = players.clone();
+    let items_clone = items.clone();
+    let maps_clone = maps.clone();
+    let npcs_clone = npcs.clone();
+    let skills_clone = skills.clone();
     tokio::spawn(async move {
-        admin_command_loop(players_clone).await;
+        admin_command_loop(players_clone, items_clone, maps_clone, npcs_clone, skills_clone).await;
     });
 
     // เซิร์ฟเวอร์ WebSocket (WebSocket Server)
@@ -96,9 +181,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ws_stream = tokio_tungstenite::accept_async(stream).await?;
         let players_ref = players.clone();
         let monsters_ref = monsters.clone();
+        let items_ref = items.clone();
+        let maps_ref = maps.clone();
+        let npcs_ref = npcs.clone();
+        let skills_ref = skills.clone();
         
         tokio::spawn(async move {
-            handle_client(ws_stream, players_ref, monsters_ref).await;
+            handle_client(ws_stream, players_ref, monsters_ref, items_ref, maps_ref, npcs_ref, skills_ref).await;
         });
     }
     Ok(())
@@ -109,6 +198,10 @@ async fn handle_client(
     ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     players: PlayersMap,
     monsters: MonstersMap,
+    items: ItemsMap,
+    maps: MapsMap,
+    npcs: NpcsMap,
+    skills: SkillsMap,
 ) {
     let mut ws = ws_stream;
     let mut player_id = String::new();
@@ -156,35 +249,83 @@ async fn handle_client(
                         }
                         Some("save_item") => {
                             // บันทึกไอเทม (Handle save item logic)
+                            if let Some(item_data) = data.get("item") {
+                                if let Ok(item) = serde_json::from_value::<ItemData>(item_data.clone()) {
+                                    let id = item.id.unwrap_or(items.len() as i32 + 1);
+                                    let item_name = item.name.clone();
+                                    items.insert(id, item);
+                                    println!("บันทึกไอเทม: {}", item_name);
+                                }
+                            }
                             break;
                         }
                         Some("save_npc") => {
                             // บันทึก NPC (Handle save npc logic)
+                            if let Some(npc_data) = data.get("npc") {
+                                if let Ok(npc) = serde_json::from_value::<NpcData>(npc_data.clone()) {
+                                    let id = npc.id.unwrap_or(npcs.len() as i32 + 1);
+                                    let npc_name = npc.name.clone();
+                                    npcs.insert(id, npc);
+                                    println!("บันทึก NPC: {}", npc_name);
+                                }
+                            }
                             break;
                         }
                         Some("save_skill") => {
                             // บันทึกสกิล (Handle save skill logic)
+                            if let Some(skill_data) = data.get("skill") {
+                                if let Ok(skill) = serde_json::from_value::<SkillData>(skill_data.clone()) {
+                                    let id = skill.id.unwrap_or(skills.len() as i32 + 1);
+                                    let skill_name = skill.name.clone();
+                                    skills.insert(id, skill);
+                                    println!("บันทึกสกิล: {}", skill_name);
+                                }
+                            }
                             break;
                         }
                         Some("save_map") => {
                             // บันทึกแผนที่ (Handle save map logic)
+                            if let Some(map_data) = data.get("map") {
+                                if let Ok(map) = serde_json::from_value::<MapData>(map_data.clone()) {
+                                    let id = map.id.unwrap_or(maps.len() as i32 + 1);
+                                    let map_name = map.name.clone();
+                                    maps.insert(id, map);
+                                    println!("บันทึกแผนที่: {}", map_name);
+                                }
+                            }
                             break;
                         }
                         Some("load_item") => {
                             // โหลดไอเทม (Handle load item logic)
-                            break;
+                            let items_vec: Vec<ItemData> = items.iter().map(|entry| entry.value().clone()).collect();
+                            let _ = ws.send(Message::Text(serde_json::json!({
+                                "type": "items_loaded",
+                                "items": items_vec
+                            }).to_string()));
                         }
                         Some("load_npc") => {
                             // โหลด NPC (Handle load npc logic)
-                            break;
+                            let npcs_vec: Vec<NpcData> = npcs.iter().map(|entry| entry.value().clone()).collect();
+                            let _ = ws.send(Message::Text(serde_json::json!({
+                                "type": "npcs_loaded",
+                                "npcs": npcs_vec
+                            }).to_string()));
                         }
                         Some("load_skill") => {
                             // โหลดสกิล (Handle load skill logic)
-                            break;
+                            let skills_vec: Vec<SkillData> = skills.iter().map(|entry| entry.value().clone()).collect();
+                            let _ = ws.send(Message::Text(serde_json::json!({
+                                "type": "skills_loaded",
+                                "skills": skills_vec
+                            }).to_string()));
                         }
                         Some("load_map") => {
                             // โหลดแผนที่ (Handle load map logic)
-                            break;
+                            let maps_vec: Vec<MapData> = maps.iter().map(|entry| entry.value().clone()).collect();
+                            let _ = ws.send(Message::Text(serde_json::json!({
+                                "type": "maps_loaded",
+                                "maps": maps_vec
+                            }).to_string()));
                         }
                         Some("logout") => {
                             // ออกจากระบบ (Logout)
@@ -220,12 +361,198 @@ fn handle_attack(player_id: &str, players: &PlayersMap, monsters: &MonstersMap) 
 
 // --- ลูปพื้นหลัง (Background Loops) ---
 
-async fn save_loop(pool: PgPool, players: PlayersMap) {
+async fn save_loop(pool: PgPool, players: PlayersMap, items: ItemsMap, maps: MapsMap, npcs: NpcsMap, skills: SkillsMap) {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 mins
     loop {
         interval.tick().await;
-        println!("กำลังบันทึกข้อมูลผู้เล่นลงฐานข้อมูล...");
-        // Implementation of SQL Update here
+        println!("กำลังบันทึกข้อมูลลงฐานข้อมูล...");
+        
+        // บันทึกไอเทม
+        for entry in items.iter() {
+            let item = entry.value();
+            let id = item.id.unwrap_or(0);
+            let stats_json = serde_json::to_string(&item.stats).unwrap_or("{}".to_string());
+            let result = sqlx::query(
+                r#"
+                INSERT INTO items (id, name, description, type, rarity, value, stackable, max_stack, stats)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    type = EXCLUDED.type,
+                    rarity = EXCLUDED.rarity,
+                    value = EXCLUDED.value,
+                    stackable = EXCLUDED.stackable,
+                    max_stack = EXCLUDED.max_stack,
+                    stats = EXCLUDED.stats
+                "#
+            )
+            .bind(id)
+            .bind(&item.name)
+            .bind(&item.description)
+            .bind(&item.item_type)
+            .bind(&item.rarity)
+            .bind(item.value)
+            .bind(item.stackable)
+            .bind(item.max_stack)
+            .bind(&stats_json)
+            .execute(&pool)
+            .await;
+            
+            match result {
+                Ok(_) => println!("บันทึกไอเทม: {}", item.name),
+                Err(e) => println!("บันทึกไอเทมผิดพลาด {}: {}", item.name, e),
+            }
+        }
+        
+        // บันทึกแผนที่
+        for entry in maps.iter() {
+            let map = entry.value();
+            let id = map.id.unwrap_or(0);
+            let tiles_json = serde_json::to_string(&map.tiles).unwrap_or("{}".to_string());
+            let spawn_points_json = serde_json::to_string(&map.spawn_points).unwrap_or("[]".to_string());
+            let npcs_json = serde_json::to_string(&map.npcs).unwrap_or("[]".to_string());
+            let monsters_json = serde_json::to_string(&map.monsters).unwrap_or("[]".to_string());
+            let result = sqlx::query(
+                r#"
+                INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    width = EXCLUDED.width,
+                    height = EXCLUDED.height,
+                    tiles = EXCLUDED.tiles,
+                    spawn_points = EXCLUDED.spawn_points,
+                    npcs = EXCLUDED.npcs,
+                    monsters = EXCLUDED.monsters
+                "#
+            )
+            .bind(id)
+            .bind(&map.name)
+            .bind(&map.description)
+            .bind(map.width)
+            .bind(map.height)
+            .bind(&tiles_json)
+            .bind(&spawn_points_json)
+            .bind(&npcs_json)
+            .bind(&monsters_json)
+            .execute(&pool)
+            .await;
+            
+            match result {
+                Ok(_) => println!("บันทึกแผนที่: {}", map.name),
+                Err(e) => println!("บันทึกแผนที่ผิดพลาด {}: {}", map.name, e),
+            }
+        }
+        
+        // บันทึก NPC
+        for entry in npcs.iter() {
+            let npc = entry.value();
+            let id = npc.id.unwrap_or(0);
+            let dialogue_json = serde_json::to_string(&npc.dialogue).unwrap_or("[]".to_string());
+            let shop_items_json = npc.shop_items.as_ref().map(|v| serde_json::to_string(v).ok()).flatten().unwrap_or("[]".to_string());
+            let quests_json = npc.quests.as_ref().map(|v| serde_json::to_string(v).ok()).flatten().unwrap_or("[]".to_string());
+            let position_json = serde_json::to_string(&npc.position).unwrap_or("{}".to_string());
+            let result = sqlx::query(
+                r#"
+                INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    sprite_id = EXCLUDED.sprite_id,
+                    level = EXCLUDED.level,
+                    hp = EXCLUDED.hp,
+                    max_hp = EXCLUDED.max_hp,
+                    attack = EXCLUDED.attack,
+                    defense = EXCLUDED.defense,
+                    move_speed = EXCLUDED.move_speed,
+                    is_hostile = EXCLUDED.is_hostile,
+                    can_trade = EXCLUDED.can_trade,
+                    can_quest = EXCLUDED.can_quest,
+                    dialogue = EXCLUDED.dialogue,
+                    shop_items = EXCLUDED.shop_items,
+                    quests = EXCLUDED.quests,
+                    position = EXCLUDED.position,
+                    map_id = EXCLUDED.map_id
+                "#
+            )
+            .bind(id)
+            .bind(&npc.name)
+            .bind(&npc.description)
+            .bind(&npc.sprite_id)
+            .bind(npc.level)
+            .bind(npc.hp)
+            .bind(npc.max_hp)
+            .bind(npc.attack)
+            .bind(npc.defense)
+            .bind(npc.move_speed)
+            .bind(npc.is_hostile)
+            .bind(npc.can_trade)
+            .bind(npc.can_quest)
+            .bind(&dialogue_json)
+            .bind(&shop_items_json)
+            .bind(&quests_json)
+            .bind(&position_json)
+            .bind(npc.map_id)
+            .execute(&pool)
+            .await;
+            
+            match result {
+                Ok(_) => println!("บันทึก NPC: {}", npc.name),
+                Err(e) => println!("บันทึก NPC ผิดพลาด {}: {}", npc.name, e),
+            }
+        }
+        
+        // บันทึกสกิล
+        for entry in skills.iter() {
+            let skill = entry.value();
+            let id = skill.id.unwrap_or(0);
+            let effects_json = serde_json::to_string(&skill.effects).unwrap_or("[]".to_string());
+            let learnable_by_json = serde_json::to_string(&skill.learnable_by).unwrap_or("[]".to_string());
+            let result = sqlx::query(
+                r#"
+                INSERT INTO skills (id, name, description, icon_id, type, element, level_required, mp_cost, cooldown, cast_time, range, area_of_effect, effects, learnable_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    icon_id = EXCLUDED.icon_id,
+                    type = EXCLUDED.type,
+                    element = EXCLUDED.element,
+                    level_required = EXCLUDED.level_required,
+                    mp_cost = EXCLUDED.mp_cost,
+                    cooldown = EXCLUDED.cooldown,
+                    cast_time = EXCLUDED.cast_time,
+                    range = EXCLUDED.range,
+                    area_of_effect = EXCLUDED.area_of_effect,
+                    effects = EXCLUDED.effects,
+                    learnable_by = EXCLUDED.learnable_by
+                "#
+            )
+            .bind(id)
+            .bind(&skill.name)
+            .bind(&skill.description)
+            .bind(&skill.icon_id)
+            .bind(&skill.skill_type)
+            .bind(&skill.element)
+            .bind(skill.level_required)
+            .bind(skill.mp_cost)
+            .bind(skill.cooldown)
+            .bind(skill.cast_time)
+            .bind(skill.range)
+            .bind(skill.area_of_effect)
+            .bind(&effects_json)
+            .bind(&learnable_by_json)
+            .execute(&pool)
+            .await;
+            
+            match result {
+                Ok(_) => println!("บันทึกสกิล: {}", skill.name),
+                Err(e) => println!("บันทึกสกิลผิดพลาด {}: {}", skill.name, e),
+            }
+        }
     }
 }
 
@@ -236,7 +563,7 @@ async fn status_effect_loop(players: PlayersMap) {
     }
 }
 
-async fn admin_command_loop(players: PlayersMap) {
+async fn admin_command_loop(players: PlayersMap, items: ItemsMap, maps: MapsMap, npcs: NpcsMap, skills: SkillsMap) {
     // ลูปคำสั่งผู้ดูแล (Admin command loop)
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin).lines();
