@@ -49,7 +49,7 @@ pub async fn admin_command_loop(
                     );
                     // ค้นหาผู้เล่นตามชื่อและอัปเดตตำแหน่ง
                 } else {
-                    println!("วิธีใช้: warp <username> <mapId> <x> <y>");
+                    println!("วิธีใช้: warp <username> <map_id> <x> <y>");
                 }
             }
             _ => println!("คำสั่งผู้ดูแลไม่รู้จัก"),
