@@ -30,6 +30,9 @@ pub async fn handle_client(
             if let Message::Text(text) = msg {
                 if let Ok(data) = serde_json::from_str::<serde_json::Value>(&text) {
                     match data["type"].as_str() {
+                        Some("register") => {
+                            handle_register(&mut ws, &data).await;
+                        }
                         Some("login") => {
                             handle_login(&mut ws, &mut player_id, &players, &data).await;
                         }
@@ -82,6 +85,103 @@ pub async fn handle_client(
     }
 }
 
+/// จัดการการสมัครสมาชิก
+async fn handle_register(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    data: &serde_json::Value,
+) {
+    let username = data["username"].as_str().unwrap_or("");
+    let email = data["email"].as_str().unwrap_or("");
+    let password = data["password"].as_str().unwrap_or("");
+
+    // Server-side validation
+    if username.trim().is_empty() {
+        let _ = ws
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "register_error",
+                    "message": "กรุณากรอกชื่อผู้ใช้"
+                })
+                .to_string(),
+            ))
+            .await;
+        return;
+    }
+
+    if email.trim().is_empty() {
+        let _ = ws
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "register_error",
+                    "message": "กรุณากรอกอีเมล"
+                })
+                .to_string(),
+            ))
+            .await;
+        return;
+    }
+
+    if !email.contains('@') {
+        let _ = ws
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "register_error",
+                    "message": "รูปแบบอีเมลไม่ถูกต้อง"
+                })
+                .to_string(),
+            ))
+            .await;
+        return;
+    }
+
+    if password.trim().is_empty() {
+        let _ = ws
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "register_error",
+                    "message": "กรุณากรอกรหัสผ่าน"
+                })
+                .to_string(),
+            ))
+            .await;
+        return;
+    }
+
+    if password.len() < 6 {
+        let _ = ws
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "register_error",
+                    "message": "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร"
+                })
+                .to_string(),
+            ))
+            .await;
+        return;
+    }
+
+    // TODO: ตรวจสอบว่าชื่อผู้ใช้หรืออีเมลซ้ำในฐานข้อมูลหรือไม่
+    // TODO: เข้ารหัสรหัสผ่านด้วย bcrypt หรือ argon2
+    // TODO: บันทึกข้อมูลผู้ใช้ลงฐานข้อมูล
+
+    // สำหรับตอนนี้ ส่งสถานะสำเร็จกลับไป
+    println!(
+        "ผู้ใช้ใหม่สมัครสมาชิก: username={}, email={}",
+        username, email
+    );
+
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "register_success",
+                "role": "user",
+                "message": "สมัครสมาชิกสำเร็จ"
+            })
+            .to_string(),
+        ))
+        .await;
+}
+
 async fn handle_login(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     player_id: &mut String,
@@ -98,14 +198,31 @@ async fn handle_login(
         y: 100.0,
         hp: 100,
         max_hp: 100,
+        mp: 50,
+        max_mp: 50,
+
+        // Base Stats
         base_atk: 20,
         base_def: 10,
         move_speed: 2.0,
         accuracy: 0.9,
         evasion: 0.1,
         crit_rate: 0.05,
+
+        // Primary Stats (เริ่มต้น 5 ทุกอัน)
+        strength: 5,
+        dex: 5,
+        agi: 5,
+        intelligence: 5,
+        luk: 5,
+        vit: 5,
+
+        // Leveling
         level: 1,
+        current_exp: 0,
+        stat_points: 0,
         skill_points: 0,
+
         role: "user".to_string(),
         learned_skills: vec![],
         active_statuses: vec![],
