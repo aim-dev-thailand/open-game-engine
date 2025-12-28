@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
 
 type MapTileType = {
   id?: number;
@@ -8,6 +8,7 @@ type MapTileType = {
   type: 'ground' | 'wall' | 'water' | 'grass' | 'road' | 'obstacle';
   walkable: boolean;
   sprite_id?: string;
+  tileset_id?: number;
 };
 
 type MapType = {
@@ -20,6 +21,7 @@ type MapType = {
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
   monsters: { template_id: number; x: number; y: number }[];
+  tileset_id?: number;
 };
 
 type EditMapModalProps = {
@@ -29,6 +31,9 @@ type EditMapModalProps = {
   onSave: (map: MapType) => void;
   mode: 'create' | 'edit';
 };
+
+// สร้าง array ของ tileset IDs (1-115)
+const TILESET_IDS = Array.from({ length: 115 }, (_, i) => i + 1);
 
 export default function EditMapModal({ visible, onClose, map, onSave, mode }: EditMapModalProps) {
   const [formData, setFormData] = useState<MapType>({
@@ -40,14 +45,17 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
     spawn_points: [],
     npcs: [],
     monsters: [],
+    tileset_id: 1,
   });
 
   const [selectedTileType, setSelectedTileType] = useState<MapTileType['type']>('ground');
-  const [editingTile, setEditingTile] = useState<MapTileType | null>(null);
+  const [selectedTileset, setSelectedTileset] = useState<number>(1);
+  const [showTilesetPicker, setShowTilesetPicker] = useState(false);
 
   useEffect(() => {
     if (map) {
       setFormData(map);
+      setSelectedTileset(map.tileset_id || 1);
     } else {
       setFormData({
         name: '',
@@ -58,7 +66,9 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
         spawn_points: [],
         npcs: [],
         monsters: [],
+        tileset_id: 1,
       });
+      setSelectedTileset(1);
     }
   }, [map, visible]);
 
@@ -71,7 +81,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
       Alert.alert('ข้อผิดพลาด', 'ขนาดแผนที่ต้องอย่างน้อย 5x5');
       return;
     }
-    onSave(formData);
+    onSave({ ...formData, tileset_id: selectedTileset });
     onClose();
   };
 
@@ -84,6 +94,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
           y,
           type: 'ground',
           walkable: true,
+          tileset_id: selectedTileset,
         });
       }
     }
@@ -97,6 +108,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
           ...tile,
           type: selectedTileType,
           walkable: selectedTileType !== 'wall' && selectedTileType !== 'water',
+          tileset_id: selectedTileset,
         };
       }
       return tile;
@@ -141,6 +153,14 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
       ...prev,
       spawn_points: prev.spawn_points.filter((_, i) => i !== index),
     }));
+  };
+
+  const getTilesetImageSource = (id: number) => {
+    try {
+      return require(`@/assets/tilesets/${id}.png`);
+    } catch {
+      return null;
+    }
   };
 
   return (
@@ -200,6 +220,64 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 />
               </View>
             </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Tileset</Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Tileset ที่เลือก: {selectedTileset}</Text>
+              <TouchableOpacity
+                style={styles.tilesetPreviewButton}
+                onPress={() => setShowTilesetPicker(!showTilesetPicker)}
+              >
+                {getTilesetImageSource(selectedTileset) ? (
+                  <Image
+                    source={getTilesetImageSource(selectedTileset)!}
+                    style={styles.tilesetPreviewImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text style={styles.tilesetPreviewText}>ไม่มีรูปภาพ</Text>
+                )}
+                <Text style={styles.tilesetPreviewLabel}>แตะเพื่อเปลี่ยน Tileset</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showTilesetPicker && (
+              <View style={styles.tilesetPicker}>
+                <Text style={styles.label}>เลือก Tileset (1-115)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tilesetScrollView}>
+                  {TILESET_IDS.map((id) => (
+                    <TouchableOpacity
+                      key={id}
+                      style={[
+                        styles.tilesetItem,
+                        selectedTileset === id && styles.tilesetItemSelected,
+                      ]}
+                      onPress={() => {
+                        setSelectedTileset(id);
+                        setFormData(prev => ({ ...prev, tileset_id: id }));
+                        setShowTilesetPicker(false);
+                      }}
+                    >
+                      {getTilesetImageSource(id) ? (
+                        <Image
+                          source={getTilesetImageSource(id)!}
+                          style={styles.tilesetItemImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.tilesetItemPlaceholder}>
+                          <Text style={styles.tilesetItemText}>{id}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.tilesetItemLabel}>{id}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <TouchableOpacity style={styles.generateButton} onPress={generateTiles}>
               <Text style={styles.generateButtonText}>สร้าง Tiles</Text>
@@ -433,6 +511,74 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  tilesetPreviewButton: {
+    backgroundColor: '#2a2a4e',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+  },
+  tilesetPreviewImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 8,
+  },
+  tilesetPreviewText: {
+    color: '#a0a0a0',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  tilesetPreviewLabel: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tilesetPicker: {
+    backgroundColor: '#2a2a4e',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  tilesetScrollView: {
+    maxHeight: 150,
+  },
+  tilesetItem: {
+    width: 100,
+    marginRight: 12,
+    padding: 8,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+  },
+  tilesetItemSelected: {
+    borderColor: '#22c55e',
+    backgroundColor: '#2a4a2e',
+  },
+  tilesetItemImage: {
+    width: 80,
+    height: 80,
+    marginBottom: 4,
+  },
+  tilesetItemPlaceholder: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tilesetItemText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  tilesetItemLabel: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   tileTypeContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -562,4 +708,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-

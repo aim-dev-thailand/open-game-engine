@@ -58,10 +58,18 @@ CREATE TABLE players (
 CREATE TABLE skills (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    skill_type VARCHAR(20) NOT NULL, -- 'attack', 'buff', 'passive'
-    base_power INT DEFAULT 0,
-    duration_sec INT DEFAULT 0,
-    effect_config JSONB DEFAULT '{}'::jsonb
+    description TEXT,
+    icon_id VARCHAR(100),
+    type VARCHAR(20) DEFAULT 'active',
+    element VARCHAR(20) DEFAULT 'none',
+    level_required INT DEFAULT 1,
+    mp_cost INT DEFAULT 0,
+    cooldown INT DEFAULT 0,
+    cast_time FLOAT DEFAULT 0,
+    range FLOAT DEFAULT 1.0,
+    area_of_effect FLOAT DEFAULT 0,
+    effects JSONB DEFAULT '[]'::jsonb,
+    learnable_by JSONB DEFAULT '["warrior","mage","archer"]'::jsonb
 );
 
 -- ตารางสกิลของผู้เล่น
@@ -103,8 +111,12 @@ CREATE TABLE items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
     type VARCHAR(50),
-    sub_type VARCHAR(50),
     icon_id VARCHAR(50),
+    description TEXT,
+    rarity VARCHAR(20) DEFAULT 'common',
+    value INT DEFAULT 0,
+    stackable BOOLEAN DEFAULT FALSE,
+    max_stack INT,
     stats JSONB DEFAULT '{}'::jsonb
 );
 
@@ -192,33 +204,6 @@ CREATE TABLE npcs (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
-
--- อัปเดต skills table ให้ตรงกับโค้ด
-ALTER TABLE skills DROP COLUMN IF EXISTS skill_type;
-ALTER TABLE skills DROP COLUMN IF EXISTS base_power;
-ALTER TABLE skills DROP COLUMN IF EXISTS duration_sec;
-ALTER TABLE skills DROP COLUMN IF EXISTS effect_config;
-
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS icon_id VARCHAR(100);
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'active';
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS element VARCHAR(20) DEFAULT 'none';
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS level_required INT DEFAULT 1;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS mp_cost INT DEFAULT 0;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS cooldown INT DEFAULT 0;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS cast_time FLOAT DEFAULT 0;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS range FLOAT DEFAULT 1.0;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS area_of_effect FLOAT DEFAULT 0;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS effects JSONB DEFAULT '[]'::jsonb;
-ALTER TABLE skills ADD COLUMN IF NOT EXISTS learnable_by JSONB DEFAULT '["warrior","mage","archer"]'::jsonb;
-
--- อัปเดต items table ให้ตรงกับโค้ด
-ALTER TABLE items DROP COLUMN IF EXISTS sub_type;
-ALTER TABLE items ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE items ADD COLUMN IF NOT EXISTS rarity VARCHAR(20) DEFAULT 'common';
-ALTER TABLE items ADD COLUMN IF NOT EXISTS value INT DEFAULT 0;
-ALTER TABLE items ADD COLUMN IF NOT EXISTS stackable BOOLEAN DEFAULT FALSE;
-ALTER TABLE items ADD COLUMN IF NOT EXISTS max_stack INT;
 
 -- ตารางประสบการณ์ต่อเลเวล (EXP Table)
 CREATE TABLE level_exp_table (

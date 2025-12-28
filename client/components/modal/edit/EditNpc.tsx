@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
 
 type DialogueType = {
   id?: number;
@@ -37,11 +37,14 @@ type EditNpcModalProps = {
   mode: 'create' | 'edit';
 };
 
+// สร้าง array ของ character sprite IDs (1-265)
+const CHARACTER_IDS = Array.from({ length: 265 }, (_, i) => i + 1);
+
 export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: EditNpcModalProps) {
   const [formData, setFormData] = useState<NpcType>({
     name: '',
     description: '',
-    sprite_id: '',
+    sprite_id: '1',
     level:1,
     hp: 100,
     max_hp: 100,
@@ -57,6 +60,8 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
     position: { x: 0, y: 0 },
   });
 
+  const [showSpritePicker, setShowSpritePicker] = useState(false);
+
   useEffect(() => {
     if (npc) {
       setFormData(npc);
@@ -64,7 +69,7 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
       setFormData({
         name: '',
         description: '',
-        sprite_id: '',
+        sprite_id: '1',
         level:1,
         hp: 100,
         max_hp: 100,
@@ -164,6 +169,15 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
     }));
   };
 
+  const getCharacterImageSource = (id: string) => {
+    try {
+      const numId = parseInt(id) || 1;
+      return require(`@/assets/characters/${numId}.png`);
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
@@ -198,15 +212,62 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
               />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Sprite ID</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.sprite_id}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, sprite_id: text }))}
-                placeholder="กรอก Sprite ID"
-              />
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Character Sprite</Text>
             </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Sprite ID ที่เลือก: {formData.sprite_id}</Text>
+              <TouchableOpacity
+                style={styles.spritePreviewButton}
+                onPress={() => setShowSpritePicker(!showSpritePicker)}
+              >
+                {getCharacterImageSource(formData.sprite_id) ? (
+                  <Image
+                    source={getCharacterImageSource(formData.sprite_id)!}
+                    style={styles.spritePreviewImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text style={styles.spritePreviewText}>ไม่มีรูปภาพ</Text>
+                )}
+                <Text style={styles.spritePreviewLabel}>แตะเพื่อเปลี่ยน Character Sprite</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showSpritePicker && (
+              <View style={styles.spritePicker}>
+                <Text style={styles.label}>เลือก Character Sprite (1-265)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.spriteScrollView}>
+                  {CHARACTER_IDS.map((id) => (
+                    <TouchableOpacity
+                      key={id}
+                      style={[
+                        styles.spriteItem,
+                        formData.sprite_id === id.toString() && styles.spriteItemSelected,
+                      ]}
+                      onPress={() => {
+                        setFormData(prev => ({ ...prev, sprite_id: id.toString() }));
+                        setShowSpritePicker(false);
+                      }}
+                    >
+                      {getCharacterImageSource(id.toString()) ? (
+                        <Image
+                          source={getCharacterImageSource(id.toString())!}
+                          style={styles.spriteItemImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.spriteItemPlaceholder}>
+                          <Text style={styles.spriteItemText}>{id}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.spriteItemLabel}>{id}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <View style={styles.row}>
               <View style={[styles.formGroup, styles.halfWidth]}>
@@ -572,6 +633,74 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  spritePreviewButton: {
+    backgroundColor: '#2a2a4e',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+  },
+  spritePreviewImage: {
+    width: 100,
+    height: 100,
+    marginBottom: 8,
+  },
+  spritePreviewText: {
+    color: '#a0a0a0',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  spritePreviewLabel: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  spritePicker: {
+    backgroundColor: '#2a2a4e',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  spriteScrollView: {
+    maxHeight: 150,
+  },
+  spriteItem: {
+    width: 90,
+    marginRight: 12,
+    padding: 8,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+  },
+  spriteItemSelected: {
+    borderColor: '#22c55e',
+    backgroundColor: '#2a4a2e',
+  },
+  spriteItemImage: {
+    width: 70,
+    height: 70,
+    marginBottom: 4,
+  },
+  spriteItemPlaceholder: {
+    width: 70,
+    height: 70,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  spriteItemText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  spriteItemLabel: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
   },
   switchContainer: {
     flexDirection: 'row',
