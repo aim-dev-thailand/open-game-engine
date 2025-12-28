@@ -1,0 +1,255 @@
+use crate::logic::combat::handle_attack;
+use crate::models::*;
+use dashmap::DashMap;
+use futures_util::{SinkExt, StreamExt};
+use std::sync::Arc;
+use tokio_tungstenite::tungstenite::Message;
+
+pub type PlayersMap = Arc<DashMap<String, PlayerState>>;
+pub type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
+pub type ItemsMap = Arc<DashMap<i32, ItemData>>;
+pub type MapsMap = Arc<DashMap<i32, MapData>>;
+pub type NpcsMap = Arc<DashMap<i32, NpcData>>;
+pub type SkillsMap = Arc<DashMap<i32, SkillData>>;
+
+/// จัดการการเชื่อมต่อ WebSocket ของ Client
+pub async fn handle_client(
+    ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    players: PlayersMap,
+    monsters: MonstersMap,
+    items: ItemsMap,
+    maps: MapsMap,
+    npcs: NpcsMap,
+    skills: SkillsMap,
+) {
+    let mut ws = ws_stream;
+    let mut player_id = String::new();
+
+    while let Some(msg_result) = ws.next().await {
+        if let Ok(msg) = msg_result {
+            if let Message::Text(text) = msg {
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&text) {
+                    match data["type"].as_str() {
+                        Some("login") => {
+                            handle_login(&mut ws, &mut player_id, &players, &data).await;
+                        }
+                        Some("move") => {
+                            handle_move(&player_id, &players, &data).await;
+                        }
+                        Some("attack") => {
+                            handle_attack(&player_id, &players, &monsters);
+                        }
+                        Some("cast_skill") => {
+                            // จัดการสกิล
+                        }
+                        Some("save_item") => {
+                            handle_save_item(&mut ws, &items, &data).await;
+                            break;
+                        }
+                        Some("save_npc") => {
+                            handle_save_npc(&mut ws, &npcs, &data).await;
+                            break;
+                        }
+                        Some("save_skill") => {
+                            handle_save_skill(&mut ws, &skills, &data).await;
+                            break;
+                        }
+                        Some("save_map") => {
+                            handle_save_map(&mut ws, &maps, &data).await;
+                            break;
+                        }
+                        Some("load_item") => {
+                            handle_load_items(&mut ws, &items).await;
+                        }
+                        Some("load_npc") => {
+                            handle_load_npcs(&mut ws, &npcs).await;
+                        }
+                        Some("load_skill") => {
+                            handle_load_skills(&mut ws, &skills).await;
+                        }
+                        Some("load_map") => {
+                            handle_load_maps(&mut ws, &maps).await;
+                        }
+                        Some("logout") => {
+                            players.remove(&player_id);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn handle_login(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    player_id: &mut String,
+    players: &PlayersMap,
+    data: &serde_json::Value,
+) {
+    let username = data["username"].as_str().unwrap_or("Unknown");
+    *player_id = uuid::Uuid::new_v4().to_string();
+
+    let new_player = PlayerState {
+        id: player_id.clone(),
+        username: username.to_string(),
+        x: 100.0,
+        y: 100.0,
+        hp: 100,
+        max_hp: 100,
+        base_atk: 20,
+        base_def: 10,
+        move_speed: 2.0,
+        accuracy: 0.9,
+        evasion: 0.1,
+        crit_rate: 0.05,
+        level: 1,
+        skill_points: 0,
+        role: "user".to_string(),
+        learned_skills: vec![],
+        active_statuses: vec![],
+        equipment: EquipmentState {
+            main_hand: None,
+            off_hand: None,
+        },
+    };
+    players.insert(player_id.clone(), new_player);
+
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({"type": "init", "id": player_id}).to_string(),
+        ))
+        .await;
+}
+
+async fn handle_move(player_id: &str, players: &PlayersMap, data: &serde_json::Value) {
+    if let Some(mut p) = players.get_mut(player_id) {
+        p.x = data["x"].as_f64().unwrap() as f32;
+        p.y = data["y"].as_f64().unwrap() as f32;
+    }
+}
+
+async fn handle_save_item(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    items: &ItemsMap,
+    data: &serde_json::Value,
+) {
+    if let Some(item_data) = data.get("item") {
+        if let Ok(item) = serde_json::from_value::<ItemData>(item_data.clone()) {
+            let id = item.id.unwrap_or(items.len() as i32 + 1);
+            let item_name = item.name.clone();
+            items.insert(id, item);
+            println!("บันทึกไอเทม: {}", item_name);
+        }
+    }
+}
+
+async fn handle_save_npc(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    npcs: &NpcsMap,
+    data: &serde_json::Value,
+) {
+    if let Some(npc_data) = data.get("npc") {
+        if let Ok(npc) = serde_json::from_value::<NpcData>(npc_data.clone()) {
+            let id = npc.id.unwrap_or(npcs.len() as i32 + 1);
+            let npc_name = npc.name.clone();
+            npcs.insert(id, npc);
+            println!("บันทึก NPC: {}", npc_name);
+        }
+    }
+}
+
+async fn handle_save_skill(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    skills: &SkillsMap,
+    data: &serde_json::Value,
+) {
+    if let Some(skill_data) = data.get("skill") {
+        if let Ok(skill) = serde_json::from_value::<SkillData>(skill_data.clone()) {
+            let id = skill.id.unwrap_or(skills.len() as i32 + 1);
+            let skill_name = skill.name.clone();
+            skills.insert(id, skill);
+            println!("บันทึกสกิล: {}", skill_name);
+        }
+    }
+}
+
+async fn handle_save_map(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    maps: &MapsMap,
+    data: &serde_json::Value,
+) {
+    if let Some(map_data) = data.get("map") {
+        if let Ok(map) = serde_json::from_value::<MapData>(map_data.clone()) {
+            let id = map.id.unwrap_or(maps.len() as i32 + 1);
+            let map_name = map.name.clone();
+            maps.insert(id, map);
+            println!("บันทึกแผนที่: {}", map_name);
+        }
+    }
+}
+
+async fn handle_load_items(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    items: &ItemsMap,
+) {
+    let items_vec: Vec<ItemData> = items.iter().map(|entry| entry.value().clone()).collect();
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "items_loaded",
+                "items": items_vec
+            })
+            .to_string(),
+        ))
+        .await;
+}
+
+async fn handle_load_npcs(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    npcs: &NpcsMap,
+) {
+    let npcs_vec: Vec<NpcData> = npcs.iter().map(|entry| entry.value().clone()).collect();
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "npcs_loaded",
+                "npcs": npcs_vec
+            })
+            .to_string(),
+        ))
+        .await;
+}
+
+async fn handle_load_skills(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    skills: &SkillsMap,
+) {
+    let skills_vec: Vec<SkillData> = skills.iter().map(|entry| entry.value().clone()).collect();
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "skills_loaded",
+                "skills": skills_vec
+            })
+            .to_string(),
+        ))
+        .await;
+}
+
+async fn handle_load_maps(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    maps: &MapsMap,
+) {
+    let maps_vec: Vec<MapData> = maps.iter().map(|entry| entry.value().clone()).collect();
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "maps_loaded",
+                "maps": maps_vec
+            })
+            .to_string(),
+        ))
+        .await;
+}
