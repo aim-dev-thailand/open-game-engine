@@ -54,6 +54,81 @@ CREATE TABLE players (
     last_updated TIMESTAMP DEFAULT NOW()
 );
 
+-- ตารางอาชีพ (Classes)
+CREATE TABLE classes (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    
+    -- เงื่อนไขการเปลี่ยนอาชีพ
+    min_level INT DEFAULT 1,
+    quest_id INT, -- เควสที่ต้องทำเพื่อเปลี่ยนอาชีพ (foreign key จะถูกเพิ่มหลังจากสร้างตาราง quests)
+    
+    -- Base Stats ของอาชีพ
+    str INT DEFAULT 5,  -- Strength
+    dex INT DEFAULT 5,  -- Dexterity
+    agi INT DEFAULT 5,  -- Agility
+    vit INT DEFAULT 5,  -- Vitality
+    int INT DEFAULT 5,  -- Intelligence
+    luk INT DEFAULT 5,  -- Luck
+    
+    -- สถานะการต่อสู้ของอาชีพ
+    hp INT DEFAULT 100,       -- พลังชีวิต
+    atk INT DEFAULT 10,       -- พลังโจมตี
+    def INT DEFAULT 5,        -- พลังป้องกัน
+    magic_atk INT DEFAULT 5,  -- พลังโจมตีเวทย์
+    magic_def INT DEFAULT 5,  -- พลังป้องกันเวทย์
+    evasion INT DEFAULT 10,   -- การหลบหลีก (%)
+    accuracy INT DEFAULT 100, -- ความแม่นยำ (%)
+    crit_rate INT DEFAULT 2,  -- อัตราคริติคอล (%)
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- เพิ่มคอลัมน์ classes_id ในตาราง players
+ALTER TABLE players ADD COLUMN classes_id INT REFERENCES classes(id);
+
+-- ตารางเควส (สำหรับเงื่อนไขการเปลี่ยนอาชีพ)
+CREATE TABLE quests (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    type VARCHAR(20) DEFAULT 'class_change', -- 'class_change', 'main', 'side', 'daily'
+    min_level INT DEFAULT 1,
+    required_classes JSONB DEFAULT '[]'::jsonb, -- อาชีพที่ต้องการก่อนทำเควส
+    rewards JSONB DEFAULT '{}'::jsonb, -- รางวัล (items, exp, gold, etc.)
+    objectives JSONB DEFAULT '[]'::jsonb, -- เป้าหมายของเควส
+    is_repeatable BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- เพิ่ม foreign key constraint จาก classes ไปยัง quests
+ALTER TABLE classes ADD CONSTRAINT fk_classes_quest_id FOREIGN KEY (quest_id) REFERENCES quests(id);
+
+-- เพิ่มข้อมูลอาชีพพื้นฐาน "นักพจญภัย"
+INSERT INTO classes (name, description, min_level, str, dex, agi, vit, int, luk, hp, atk, def, magic_atk, magic_def, evasion, accuracy, crit_rate)
+VALUES (
+    'นักพจญภัย',
+    'อาชีพพื้นฐานสำหรับผู้เริ่มต้นผจญภัย',
+    1,
+    5,  -- str
+    5,  -- dex
+    5,  -- agi
+    5,  -- vit
+    5,  -- int
+    5,  -- luk
+    100, -- hp
+    10,  -- atk
+    5,   -- def
+    5,   -- magic_atk
+    5,   -- magic_def
+    10,  -- evasion (%)
+    100, -- accuracy (%)
+    2    -- crit_rate (%)
+);
+
 -- ตารางสกิล
 CREATE TABLE skills (
     id SERIAL PRIMARY KEY,
@@ -273,3 +348,13 @@ CREATE INDEX idx_map_spawns_map_id ON map_spawns(map_id);
 CREATE INDEX idx_level_exp_table_level ON level_exp_table(level);
 CREATE INDEX idx_player_level_history_player_id ON player_level_history(player_id);
 CREATE INDEX idx_exp_formula_active ON exp_formula(is_active);
+
+-- Index สำหรับตาราง classes
+CREATE INDEX idx_classes_name ON classes(name);
+CREATE INDEX idx_classes_min_level ON classes(min_level);
+CREATE INDEX idx_players_classes_id ON players(classes_id);
+
+-- Index สำหรับตาราง quests
+CREATE INDEX idx_quests_name ON quests(name);
+CREATE INDEX idx_quests_type ON quests(type);
+CREATE INDEX idx_quests_min_level ON quests(min_level);
