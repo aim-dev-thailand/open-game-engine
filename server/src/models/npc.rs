@@ -20,4 +20,18 @@ pub struct NpcData {
     pub quests: Option<Vec<i32>>,
     pub position: serde_json::Value,
     pub map_id: Option<i32>,
+    #[serde(default = "default_npc_type")]
+    pub npc_type: String,
+    #[serde(default)]
+    pub crit_rate: f32,
+    #[serde(default)]
+    pub dodge_value: f32,
+    #[serde(default)]
+    pub hit_value: f32,
+    #[serde(default)]
+    pub attack_first: bool,
+}
+
+fn default_npc_type() -> String {
+    "monster".to_string()
 }

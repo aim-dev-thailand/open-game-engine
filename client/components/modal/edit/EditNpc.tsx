@@ -27,6 +27,11 @@ type NpcType = {
   quests?: number[];
   position: { x: number; y: number };
   map_id?: number;
+  npc_type: 'monster' | 'shop' | 'quest';
+  crit_rate: number;
+  dodge_value: number;
+  hit_value: number;
+  attack_first: boolean;
 };
 
 type EditNpcModalProps = {
@@ -45,7 +50,7 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
     name: '',
     description: '',
     sprite_id: '1',
-    level:1,
+    level: 1,
     hp: 100,
     max_hp: 100,
     attack: 10,
@@ -58,6 +63,11 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
     shop_items: [],
     quests: [],
     position: { x: 0, y: 0 },
+    npc_type: 'monster',
+    crit_rate: 0.05,
+    dodge_value: 0.0,
+    hit_value: 0.0,
+    attack_first: false,
   });
 
   const [showSpritePicker, setShowSpritePicker] = useState(false);
@@ -70,7 +80,7 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
         name: '',
         description: '',
         sprite_id: '1',
-        level:1,
+        level: 1,
         hp: 100,
         max_hp: 100,
         attack: 10,
@@ -83,6 +93,11 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
         shop_items: [],
         quests: [],
         position: { x: 0, y: 0 },
+        npc_type: 'monster',
+        crit_rate: 0.05,
+        dodge_value: 0.0,
+        hit_value: 0.0,
+        attack_first: false,
       });
     }
   }, [npc, visible]);
@@ -210,6 +225,29 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
                 multiline
                 numberOfLines={3}
               />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>ประเภท NPC</Text>
+              <View style={styles.typeSelector}>
+                {(['monster', 'shop', 'quest'] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeButton,
+                      formData.npc_type === type && styles.typeButtonSelected
+                    ]}
+                    onPress={() => setFormData(prev => ({ ...prev, npc_type: type }))}
+                  >
+                    <Text style={[
+                      styles.typeButtonText,
+                      formData.npc_type === type && styles.typeButtonTextSelected
+                    ]}>
+                      {type.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             <View style={styles.section}>
@@ -345,6 +383,43 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
               </View>
             </View>
 
+            <View style={styles.row}>
+              <View style={[styles.formGroup, styles.halfWidth]}>
+                <Text style={styles.label}>อัตราคริติคอล (0.0-1.0)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.crit_rate.toString()}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, crit_rate: parseFloat(text) || 0.0 }))}
+                  placeholder="0.05"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={[styles.formGroup, styles.halfWidth]}>
+                <Text style={styles.label}>ค่าการแม่นยำ</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.hit_value.toString()}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, hit_value: parseFloat(text) || 0.0 }))}
+                  placeholder="0.0"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <View style={[styles.formGroup, styles.halfWidth]}>
+                <Text style={styles.label}>ค่าการหลบหลีก</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.dodge_value.toString()}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, dodge_value: parseFloat(text) || 0.0 }))}
+                  placeholder="0.0"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>พฤติกรรม</Text>
             </View>
@@ -363,6 +438,24 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
                   onPress={() => setFormData(prev => ({ ...prev, is_hostile: true }))}
                 >
                   <Text style={[styles.switchButtonText, formData.is_hostile && styles.switchButtonTextActive]}>ใช่</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>โจมตีก่อน (Aggressive)</Text>
+              <View style={styles.switchContainer}>
+                <TouchableOpacity
+                  style={[styles.switchButton, !formData.attack_first && styles.switchButtonActive]}
+                  onPress={() => setFormData(prev => ({ ...prev, attack_first: false }))}
+                >
+                  <Text style={[styles.switchButtonText, !formData.attack_first && styles.switchButtonTextActive]}>ไม่</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.switchButton, formData.attack_first && styles.switchButtonActive]}
+                  onPress={() => setFormData(prev => ({ ...prev, attack_first: true }))}
+                >
+                  <Text style={[styles.switchButtonText, formData.attack_first && styles.switchButtonTextActive]}>ใช่</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -799,5 +892,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  typeButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#2a2a4e',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    alignItems: 'center',
+  },
+  typeButtonSelected: {
+    backgroundColor: '#3b82f6',
+  },
+  typeButtonText: {
+    color: '#a0a0a0',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  typeButtonTextSelected: {
+    color: '#fff',
   },
 });

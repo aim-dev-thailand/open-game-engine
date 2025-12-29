@@ -278,6 +278,14 @@ CREATE TABLE npcs (
     quests JSONB DEFAULT '[]'::jsonb, -- เควสที่ให้ (array of quest_id)
     position JSONB DEFAULT '{}'::jsonb, -- ตำแหน่งเริ่มต้น {x, y}
     map_id INT REFERENCES maps(id), -- แผนที่ที่อยู่
+    
+    -- เพิ่มเติม
+    npc_type VARCHAR(20) DEFAULT 'monster', -- 'monster', 'shop', 'quest'
+    crit_rate FLOAT DEFAULT 0.05,
+    dodge_value FLOAT DEFAULT 0.0,
+    hit_value FLOAT DEFAULT 0.0,
+    attack_first BOOLEAN DEFAULT FALSE,
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

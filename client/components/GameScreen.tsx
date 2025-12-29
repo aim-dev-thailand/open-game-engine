@@ -79,6 +79,11 @@ type NpcType = {
   quests?: number[];
   position: { x: number; y: number };
   map_id?: number;
+  npc_type: 'monster' | 'shop' | 'quest';
+  crit_rate: number;
+  dodge_value: number;
+  hit_value: number;
+  attack_first: boolean;
 };
 
 type SkillType = {
@@ -106,25 +111,25 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
 
   const [damages, setDamages] = useState<DamageType[]>([]);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
-  
+
   // List modal states
   const [showItemList, setShowItemList] = useState(false);
   const [showSkillList, setShowSkillList] = useState(false);
   const [showNpcList, setShowNpcList] = useState(false);
   const [showMapList, setShowMapList] = useState(false);
-  
+
   // Edit modal states
   const [showEditItem, setShowEditItem] = useState(false);
   const [showEditMap, setShowEditMap] = useState(false);
   const [showEditNpc, setShowEditNpc] = useState(false);
   const [showEditSkill, setShowEditSkill] = useState(false);
-  
+
   // Edit modes
   const [itemEditMode, setItemEditMode] = useState<'create' | 'edit'>('create');
   const [mapEditMode, setMapEditMode] = useState<'create' | 'edit'>('create');
   const [npcEditMode, setNpcEditMode] = useState<'create' | 'edit'>('create');
   const [skillEditMode, setSkillEditMode] = useState<'create' | 'edit'>('create');
-  
+
   // Current editing items
   const [currentItem, setCurrentItem] = useState<ItemType | undefined>();
   const [currentMap, setCurrentMap] = useState<MapType | undefined>();
@@ -143,7 +148,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
     wsRef.current.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
       if (data.type === 'init') {
-          // setMyId(data.id); // Not used
+        // setMyId(data.id); // Not used
       } else if (data.type === 'damage') {
         addDamage(
           Dimensions.get('window').width / 2,
@@ -163,7 +168,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
         console.log('แผนที่โหลดแล้ว:', data.maps);
       }
     };
-    }, [username]);
+  }, [username]);
 
   const addDamage = (x: number, y: number, dmg: number, isCrit: boolean) => {
     const id = Date.now();
@@ -302,14 +307,14 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
   return (
     <View style={styles.container}>
       <GLView style={styles.glView} onContextCreate={onContextCreate} />
-      
+
       {/* Admin Menu Button */}
       {isAdmin && (
         <TouchableOpacity style={styles.adminButton} onPress={() => setShowAdminMenu(true)}>
           <Text style={styles.adminButtonText}>⚙️ ผู้ดูแล</Text>
         </TouchableOpacity>
       )}
-      
+
       {/* User Info */}
       <View style={styles.userInfo}>
         <Text style={styles.userInfoText}>{username}</Text>
@@ -317,7 +322,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
           {role === 'admin' ? 'ผู้ดูแล' : role === 'moderator' ? 'ผู้ควบคุม' : 'ผู้ใช้'}
         </Text>
       </View>
-      
+
       {damages.map(d => (
         <DamageFloater
           key={d.id}
@@ -330,9 +335,9 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
       ))}
 
       <View style={styles.leftControls}>
-        <Joypad onMove={(x: number, y: number) => { facingDir.current = { x, y }; }} onStop={() => {}} />
+        <Joypad onMove={(x: number, y: number) => { facingDir.current = { x, y }; }} onStop={() => { }} />
       </View>
-      
+
       <ActionPad onAttack={handleAttack} />
 
       {/* Admin Menu Modal */}
@@ -457,7 +462,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   glView: { flex: 1 },
   leftControls: { position: 'absolute', bottom: 50, left: 50 },
-  
+
   // Admin Button
   adminButton: {
     position: 'absolute',
@@ -474,7 +479,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  
+
   // User Info
   userInfo: {
     position: 'absolute',
@@ -499,7 +504,7 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     fontWeight: 'bold',
   },
-  
+
   // Modal
   modalOverlay: {
     flex: 1,

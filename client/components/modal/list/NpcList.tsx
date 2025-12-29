@@ -20,6 +20,11 @@ type NpcType = {
   quests?: number[];
   position: { x: number; y: number };
   map_id?: number;
+  npc_type: 'monster' | 'shop' | 'quest';
+  crit_rate: number;
+  dodge_value: number;
+  hit_value: number;
+  attack_first: boolean;
 };
 
 type NpcListProps = {
@@ -75,10 +80,13 @@ export default function NpcList({ visible, onClose, onEditNpc, wsRef }: NpcListP
                 npcs.map((npc, index) => (
                   <View key={index} style={styles.npcCard}>
                     <View style={styles.npcHeader}>
-                      <Text style={styles.npcName}>{npc.name}</Text>
+                      <Text style={styles.npcName}>{npc.name} - ประเภท {npc.npc_type}</Text>
                       <View style={styles.npcBadges}>
                         {npc.is_hostile && (
                           <Text style={styles.hostileBadge}>⚔️ ศัตรู</Text>
+                        )}
+                        {npc.attack_first && (
+                          <Text style={styles.hostileBadge}>⚡ โจมตีก่อน</Text>
                         )}
                         {npc.can_trade && (
                           <Text style={styles.tradeBadge}>💰 ค้าขาย</Text>
@@ -97,6 +105,9 @@ export default function NpcList({ visible, onClose, onEditNpc, wsRef }: NpcListP
                       <Text style={styles.statText}>⚔️ โจมตี: {npc.attack}</Text>
                       <Text style={styles.statText}>🛡️ ป้องกัน: {npc.defense}</Text>
                       <Text style={styles.statText}>🏃 ความเร็ว: {npc.move_speed}</Text>
+                      <Text style={styles.statText}>💥 คริ: {npc.crit_rate * 100}%</Text>
+                      <Text style={styles.statText}>💨 หลบ: {npc.dodge_value}</Text>
+                      <Text style={styles.statText}>🎯 แม่น: {npc.hit_value}</Text>
                     </View>
                     <View style={styles.npcPosition}>
                       <Text style={styles.positionText}>

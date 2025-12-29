@@ -137,8 +137,8 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         let position_json = serde_json::to_string(&npc.position).unwrap_or("{}".to_string());
         let result = sqlx::query(
             r#"
-            INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id, npc_type, crit_rate, dodge_value, hit_value, attack_first)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -156,7 +156,12 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
                 shop_items = EXCLUDED.shop_items,
                 quests = EXCLUDED.quests,
                 position = EXCLUDED.position,
-                map_id = EXCLUDED.map_id
+                map_id = EXCLUDED.map_id,
+                npc_type = EXCLUDED.npc_type,
+                crit_rate = EXCLUDED.crit_rate,
+                dodge_value = EXCLUDED.dodge_value,
+                hit_value = EXCLUDED.hit_value,
+                attack_first = EXCLUDED.attack_first
             "#,
         )
         .bind(id)
@@ -177,6 +182,11 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         .bind(&quests_json)
         .bind(&position_json)
         .bind(npc.map_id)
+        .bind(&npc.npc_type)
+        .bind(npc.crit_rate)
+        .bind(npc.dodge_value)
+        .bind(npc.hit_value)
+        .bind(npc.attack_first)
         .execute(pool)
         .await;
 
