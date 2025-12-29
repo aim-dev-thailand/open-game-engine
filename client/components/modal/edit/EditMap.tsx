@@ -231,7 +231,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 style={styles.tilesetPreviewButton}
                 onPress={() => setShowTilesetPicker(!showTilesetPicker)}
               >
-                {getTilesetImageSource(selectedTileset) ? (
+                {selectedTileset && getTilesetImageSource(selectedTileset) ? (
                   <Image
                     source={getTilesetImageSource(selectedTileset)!}
                     style={styles.tilesetPreviewImage}

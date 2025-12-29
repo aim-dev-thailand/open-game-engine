@@ -22,6 +22,7 @@ type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
 type ItemsMap = Arc<DashMap<i32, ItemData>>;
 type MapsMap = Arc<DashMap<i32, MapData>>;
 type NpcsMap = Arc<DashMap<i32, NpcData>>;
+type ClassesMap = Arc<DashMap<i32, ClassData>>;
 type SkillsMap = Arc<DashMap<i32, SkillData>>;
 
 // --- ฟังก์ชันหลัก (Main Function) ---
@@ -36,6 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let items: ItemsMap = Arc::new(DashMap::new());
     let maps: MapsMap = Arc::new(DashMap::new());
     let npcs: NpcsMap = Arc::new(DashMap::new());
+    let classes: ClassesMap = Arc::new(DashMap::new());
     let skills: SkillsMap = Arc::new(DashMap::new());
 
     // สร้างงานพื้นหลัง - บันทึกข้อมูล
@@ -92,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let items_ref = items.clone();
         let maps_ref = maps.clone();
         let npcs_ref = npcs.clone();
+        let classes_ref = classes.clone();
         let skills_ref = skills.clone();
 
         tokio::spawn(async move {
@@ -102,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 items_ref,
                 maps_ref,
                 npcs_ref,
+                classes_ref,
                 skills_ref,
             )
             .await;

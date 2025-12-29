@@ -10,6 +10,7 @@ pub type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
 pub type ItemsMap = Arc<DashMap<i32, ItemData>>;
 pub type MapsMap = Arc<DashMap<i32, MapData>>;
 pub type NpcsMap = Arc<DashMap<i32, NpcData>>;
+pub type ClassesMap = Arc<DashMap<i32, ClassData>>;
 pub type SkillsMap = Arc<DashMap<i32, SkillData>>;
 
 /// จัดการการเชื่อมต่อ WebSocket ของ Client
@@ -20,6 +21,7 @@ pub async fn handle_client(
     items: ItemsMap,
     maps: MapsMap,
     npcs: NpcsMap,
+    classes: ClassesMap,
     skills: SkillsMap,
 ) {
     let mut ws = ws_stream;
@@ -53,6 +55,10 @@ pub async fn handle_client(
                             handle_save_npc(&mut ws, &npcs, &data).await;
                             break;
                         }
+                        Some("save_class") => {
+                            handle_save_class(&mut ws, &classes, &data).await;
+                            break;
+                        }
                         Some("save_skill") => {
                             handle_save_skill(&mut ws, &skills, &data).await;
                             break;
@@ -66,6 +72,9 @@ pub async fn handle_client(
                         }
                         Some("load_npc") => {
                             handle_load_npcs(&mut ws, &npcs).await;
+                        }
+                        Some("load_classes") => {
+                            handle_load_classes(&mut ws, &classes).await;
                         }
                         Some("load_skill") => {
                             handle_load_skills(&mut ws, &skills).await;
@@ -165,10 +174,7 @@ async fn handle_register(
     // TODO: บันทึกข้อมูลผู้ใช้ลงฐานข้อมูล
 
     // สำหรับตอนนี้ ส่งสถานะสำเร็จกลับไป
-    println!(
-        "ผู้ใช้ใหม่สมัครสมาชิก: username={}, email={}",
-        username, email
-    );
+    println!("ผู้ใช้ใหม่สมัครสมาชิก: username={}, email={}", username, email);
 
     let _ = ws
         .send(Message::Text(
@@ -365,6 +371,45 @@ async fn handle_load_maps(
             serde_json::json!({
                 "type": "maps_loaded",
                 "maps": maps_vec
+            })
+            .to_string(),
+        ))
+        .await;
+}
+
+async fn handle_save_class(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    classes: &ClassesMap,
+    data: &serde_json::Value,
+) {
+    if let Some(class_data) = data.get("class") {
+        if let Ok(class_obj) = serde_json::from_value::<ClassData>(class_data.clone()) {
+            let id = class_obj.id.unwrap_or(classes.len() as i32 + 1);
+            let class_name = class_obj.name.clone();
+            // Ensure ID is set if it was None (though for DashMap key we use the computed id)
+            let mut class_to_save = class_obj.clone();
+            if class_to_save.id.is_none() {
+                class_to_save.id = Some(id);
+            }
+
+            classes.insert(id, class_to_save);
+            println!("บันทึกอาชีพ: {}", class_name);
+        } else {
+            println!("Error parsing class data");
+        }
+    }
+}
+
+async fn handle_load_classes(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    classes: &ClassesMap,
+) {
+    let classes_vec: Vec<ClassData> = classes.iter().map(|entry| entry.value().clone()).collect();
+    let _ = ws
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "classes_loaded",
+                "classes": classes_vec
             })
             .to_string(),
         ))

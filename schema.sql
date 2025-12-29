@@ -76,8 +76,10 @@ CREATE TABLE classes (
     hp INT DEFAULT 100,       -- พลังชีวิต
     atk INT DEFAULT 10,       -- พลังโจมตี
     def INT DEFAULT 5,        -- พลังป้องกัน
-    magic_atk INT DEFAULT 5,  -- พลังโจมตีเวทย์
-    magic_def INT DEFAULT 5,  -- พลังป้องกันเวทย์
+    matk INT DEFAULT 5,       -- พลังโจมตีเวทย์
+    mdef INT DEFAULT 5,       -- พลังป้องกันเวทย์
+    spd INT DEFAULT 5,        -- ความเร็ว (Attack Speed / Turn Speed)
+    movespeed FLOAT DEFAULT 2.0, -- ความเร็วในการเคลื่อนที่
     evasion INT DEFAULT 10,   -- การหลบหลีก (%)
     accuracy INT DEFAULT 100, -- ความแม่นยำ (%)
     crit_rate INT DEFAULT 2,  -- อัตราคริติคอล (%)
