@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
+import { TILESETS } from '@/assets/tilesets';
 
 type MapTileType = {
   id?: number;
@@ -157,7 +158,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
 
   const getTilesetImageSource = (id: number) => {
     try {
-      return require(`@/assets/tilesets/${id}.png`);
+      return TILESETS[id];
     } catch {
       return null;
     }

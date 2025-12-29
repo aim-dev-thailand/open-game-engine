@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
+import { CHARACTERS } from '@/assets/characters';
 
 type DialogueType = {
   id?: number;
@@ -187,7 +188,7 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
   const getCharacterImageSource = (id: string) => {
     try {
       const numId = parseInt(id) || 1;
-      return require(`@/assets/characters/${numId}.png`);
+      return CHARACTERS[numId];
     } catch {
       return null;
     }
