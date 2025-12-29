@@ -6,7 +6,6 @@ CREATE TYPE user_role AS ENUM ('user', 'moderator', 'admin');
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role user_role DEFAULT 'user',
     created_at TIMESTAMP DEFAULT NOW(),
@@ -15,13 +14,14 @@ CREATE TABLE users (
 
 -- Index สำหรับการค้นหา
 CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
 
 -- ตารางผู้เล่น (ข้อมูลในเกม)
 CREATE TABLE players (
     id VARCHAR(64) PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     username VARCHAR(50) UNIQUE NOT NULL,
+
+    -- Character Stats
     x FLOAT DEFAULT 0,
     y FLOAT DEFAULT 0,
     hp INT DEFAULT 100,
@@ -59,6 +59,7 @@ CREATE TABLE classes (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
+    sprite_id VARCHAR(5) NOT NULL,
     
     -- เงื่อนไขการเปลี่ยนอาชีพ
     min_level INT DEFAULT 1,
@@ -78,7 +79,7 @@ CREATE TABLE classes (
     def INT DEFAULT 5,        -- พลังป้องกัน
     matk INT DEFAULT 5,       -- พลังโจมตีเวทย์
     mdef INT DEFAULT 5,       -- พลังป้องกันเวทย์
-    spd INT DEFAULT 5,        -- ความเร็ว (Attack Speed / Turn Speed)
+    atkspd INT DEFAULT 5,        -- ความเร็ว (Attack Speed / Turn Speed)
     movespeed FLOAT DEFAULT 2.0, -- ความเร็วในการเคลื่อนที่
     evasion INT DEFAULT 10,   -- การหลบหลีก (%)
     accuracy INT DEFAULT 100, -- ความแม่นยำ (%)
@@ -110,7 +111,7 @@ CREATE TABLE quests (
 ALTER TABLE classes ADD CONSTRAINT fk_classes_quest_id FOREIGN KEY (quest_id) REFERENCES quests(id);
 
 -- เพิ่มข้อมูลอาชีพพื้นฐาน "นักพจญภัย"
-INSERT INTO classes (name, description, min_level, str, dex, agi, vit, int, luk, hp, atk, def, magic_atk, magic_def, evasion, accuracy, crit_rate)
+INSERT INTO classes (name, description, min_level, str, dex, agi, vit, int, luk, hp, atk, def, matk, mdef, atkspd, evasion, accuracy, crit_rate)
 VALUES (
     'นักพจญภัย',
     'อาชีพพื้นฐานสำหรับผู้เริ่มต้นผจญภัย',
@@ -126,6 +127,7 @@ VALUES (
     5,   -- def
     5,   -- magic_atk
     5,   -- magic_def
+    5,   -- atk_speed
     10,  -- evasion (%)
     100, -- accuracy (%)
     2    -- crit_rate (%)
@@ -306,12 +308,10 @@ INSERT INTO level_exp_table (level, exp_required, exp_cumulative, stat_points_re
 SELECT
     level,
     FLOOR(100 * POWER(level, 1.5))::INT as exp_required,
-    SUM(FLOOR(100 * POWER(i, 1.5))) OVER (ORDER BY level)::INT as exp_cumulative,
+    SUM(FLOOR(100 * POWER(level, 1.5))) OVER (ORDER BY level)::INT as exp_cumulative,
     5 as stat_points_reward,
     1 as skill_points_reward
 FROM generate_series(1, 100) as level
-CROSS JOIN LATERAL generate_series(1, level) as i
-GROUP BY level
 ORDER BY level;
 
 -- ตารางสูตร EXP (สำหรับปรับแต่งสูตรในอนาคต)

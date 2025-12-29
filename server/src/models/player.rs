@@ -15,20 +15,20 @@ pub struct PlayerState {
     // Base Stats
     pub base_atk: i32,
     pub base_def: i32,
-    pub move_speed: f32,
+    pub move_speed: f64,
     pub accuracy: f32,
     pub evasion: f32,
     pub crit_rate: f32,
 
     // Primary Stats (สถานะหลัก)
     #[serde(rename = "str")]
-    pub strength: i32,  // Strength - เพิ่มพลังโจมตีกายภาพ
-    pub dex: i32,  // Dexterity - เพิ่มความแม่นยำและโจมตีทางไกล
-    pub agi: i32,  // Agility - เพิ่มอัตราหลบหลีกและความเร็ว
+    pub strength: i32, // Strength - เพิ่มพลังโจมตีกายภาพ
+    pub dex: i32, // Dexterity - เพิ่มความแม่นยำและโจมตีทางไกล
+    pub agi: i32, // Agility - เพิ่มอัตราหลบหลีกและความเร็ว
     #[serde(rename = "int")]
-    pub intelligence: i32,  // Intelligence - เพิ่มพลังโจมตีเวทย์และ MP
-    pub luk: i32,  // Luck - เพิ่มอัตราคริติคอลและ drop rate
-    pub vit: i32,  // Vitality - เพิ่มพลังชีวิตและป้องกัน
+    pub intelligence: i32, // Intelligence - เพิ่มพลังโจมตีเวทย์และ MP
+    pub luk: i32, // Luck - เพิ่มอัตราคริติคอลและ drop rate
+    pub vit: i32, // Vitality - เพิ่มพลังชีวิตและป้องกัน
 
     // Leveling System
     pub level: i32,
@@ -79,9 +79,9 @@ impl PlayerState {
         self.crit_rate + (self.luk as f32 * 0.001)
     }
 
-    pub fn calculate_move_speed(&self) -> f32 {
+    pub fn calculate_move_speed(&self) -> f64 {
         // Move Speed = base_move_speed + (AGI * 0.01)
-        self.move_speed + (self.agi as f32 * 0.01)
+        self.move_speed + (self.agi as f64 * 0.01)
     }
 
     /// คำนวณ EXP ที่ต้องการเพื่อเลเวลอัพ
@@ -108,8 +108,8 @@ impl PlayerState {
     fn level_up(&mut self) {
         self.current_exp -= self.exp_to_next_level();
         self.level += 1;
-        self.stat_points += 5;  // ได้ 5 stat points ต่อ level
-        self.skill_points += 1;  // ได้ 1 skill point ต่อ level
+        self.stat_points += 5; // ได้ 5 stat points ต่อ level
+        self.skill_points += 1; // ได้ 1 skill point ต่อ level
 
         // เติม HP/MP เต็ม
         self.hp = self.calculate_total_hp();

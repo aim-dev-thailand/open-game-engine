@@ -14,6 +14,8 @@ const ActionPad: React.FC<ActionPadProps> = ({ onAttack }) => {
             {/* Skill Slots Placeholder */}
             <View style={[styles.skillButton, { top: 10, right: 10 }]}><Text>S1</Text></View>
             <View style={[styles.skillButton, { bottom: 10, left: 10 }]}><Text>S2</Text></View>
+            <View style={[styles.skillButton, { top: -50, right: 10 }]}><Text>S1</Text></View>
+            <View style={[styles.skillButton, { bottom: 10, left: -50 }]}><Text>S4</Text></View>
         </View>
     );
 };

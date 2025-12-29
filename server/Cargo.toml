@@ -5,12 +5,14 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-tokio-tungstenite = "0.20"
+tokio-tungstenite = "0.28"
 futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono"] }
-dashmap = "5.5"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono"] }
+dashmap = "6"
 chrono = "0.4"
-rand = "0.8"
+rand = "0.9"
 uuid = { version = "1.0", features = ["v4"] }
+bcrypt = "0.17.1"
+bigdecimal = "0.4.10"

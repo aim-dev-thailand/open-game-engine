@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
+import { WS_API } from '@/env';
+import { CharacterData } from '@/model/character';
 import * as THREE from 'three'; // If you see type errors, run: npm i --save-dev @types/three
 import Joypad from './ui/Joypad';
 import ActionPad from './ui/ActionPad';
@@ -14,11 +16,11 @@ import ItemList from './modal/list/ItemList';
 import SkillList from './modal/list/SkillList';
 import NpcList from './modal/list/NpcList';
 import MapList from './modal/list/MapList';
-import { WS_API } from '@/env';
 
 
 type GameScreenProps = {
   username: string;
+  character: CharacterData;
   onLogout: () => void;
   role?: string;
 };
@@ -103,7 +105,7 @@ type SkillType = {
   learnable_by: string[];
 };
 
-export default function GameScreen({ username, onLogout, role = 'user' }: GameScreenProps) {
+export default function GameScreen({ username, character, onLogout, role = 'user' }: GameScreenProps) {
   const rendererRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -319,7 +321,7 @@ export default function GameScreen({ username, onLogout, role = 'user' }: GameSc
       <View style={styles.userInfo}>
         <Text style={styles.userInfoText}>{username}</Text>
         <Text style={[styles.roleText, role === 'admin' && styles.adminRoleText]}>
-          {role === 'admin' ? 'ผู้ดูแล' : role === 'moderator' ? 'ผู้ควบคุม' : 'ผู้ใช้'}
+          {character.character_name} {role === 'admin' ? '(ผู้ดูแล)' : role === 'moderator' ? '(ผู้ควบคุม)' : '(ผู้เล่น)'}
         </Text>
       </View>
 

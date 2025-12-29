@@ -89,6 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     while let Ok((stream, _addr)) = listener.accept().await {
         let ws_stream = tokio_tungstenite::accept_async(stream).await?;
+        let pool_ref = pool.clone();
         let players_ref = players.clone();
         let monsters_ref = monsters.clone();
         let items_ref = items.clone();
@@ -100,6 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             handle_client(
                 ws_stream,
+                pool_ref,
                 players_ref,
                 monsters_ref,
                 items_ref,

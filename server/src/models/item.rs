@@ -5,6 +5,7 @@ pub struct ItemData {
     pub id: Option<i32>,
     pub name: String,
     pub description: String,
+    pub sprite_id: String,
     #[serde(rename = "type")]
     pub item_type: String,
     pub rarity: String,

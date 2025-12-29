@@ -5,6 +5,7 @@ pub struct ClassData {
     pub id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
+    pub sprite_id: String,
 
     // เงื่อนไขการเปลี่ยนอาชีพ
     pub min_level: i32,
@@ -26,8 +27,8 @@ pub struct ClassData {
     pub def: i32,
     pub matk: i32,      // Renamed from magic_atk
     pub mdef: i32,      // Renamed from magic_def
-    pub spd: i32,       // New field
-    pub movespeed: f32, // New field, float
+    pub atkspd: i32,    // New field
+    pub movespeed: f64, // New field, float
     pub evasion: i32,
     pub accuracy: i32,
     pub crit_rate: i32,
