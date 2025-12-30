@@ -7,20 +7,7 @@ import CreateCharacter from '@/components/screen/CreateCharacter';
 
 type Page = "login" | "register" | "characterList" | "createCharacter" | "game";
 
-interface CharacterData {
-  id: string;
-  character_name: string;
-  class_name: string;
-  level: number;
-  hp: number;
-  max_hp: number;
-  str: number;
-  dex: number;
-  agi: number;
-  vit: number;
-  int: number;
-  luk: number;
-}
+import { CharacterData } from '@/model/character';
 
 export default function App() {
   const [username, setUsername] = React.useState("");

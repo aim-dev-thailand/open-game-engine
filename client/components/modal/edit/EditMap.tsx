@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
+import { Asset } from 'expo-asset';
 import { TILESETS } from '@/assets/tilesets';
 
 type MapTileType = {
@@ -10,6 +12,8 @@ type MapTileType = {
   walkable: boolean;
   sprite_id?: string;
   tileset_id?: number;
+  tileX?: number;
+  tileY?: number;
 };
 
 type MapType = {
@@ -21,7 +25,7 @@ type MapType = {
   tiles: MapTileType[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { template_id: number; x: number; y: number }[];
+  monsters: { id: number; x: number; y: number }[];
   tileset_id?: number;
 };
 
@@ -51,7 +55,11 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
 
   const [selectedTileType, setSelectedTileType] = useState<MapTileType['type']>('ground');
   const [selectedTileset, setSelectedTileset] = useState<number>(1);
+  const [selectedTileX, setSelectedTileX] = useState<number | undefined>(undefined);
+  const [selectedTileY, setSelectedTileY] = useState<number | undefined>(undefined);
   const [showTilesetPicker, setShowTilesetPicker] = useState(false);
+  const [showTileSelector, setShowTileSelector] = useState(false);
+  const [tilesetDimensions, setTilesetDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     if (map) {
@@ -72,6 +80,28 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
       setSelectedTileset(1);
     }
   }, [map, visible]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadDimensions = async () => {
+      if (selectedTileset) {
+        const source = getTilesetImageSource(selectedTileset);
+        if (source) {
+          try {
+            const asset = Asset.fromModule(source);
+            await asset.downloadAsync();
+            if (isMounted && asset.width && asset.height) {
+              setTilesetDimensions({ width: asset.width, height: asset.height });
+            }
+          } catch (e) {
+            console.error("Failed to load tileset dimensions", e);
+          }
+        }
+      }
+    };
+    loadDimensions();
+    return () => { isMounted = false; };
+  }, [selectedTileset]);
 
   const handleSave = () => {
     if (!formData.name.trim()) {
@@ -110,6 +140,8 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
           type: selectedTileType,
           walkable: selectedTileType !== 'wall' && selectedTileType !== 'water',
           tileset_id: selectedTileset,
+          tileX: selectedTileX,
+          tileY: selectedTileY,
         };
       }
       return tile;
@@ -204,8 +236,8 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 <TextInput
                   style={styles.input}
                   value={formData.width.toString()}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, width: parseInt(text) || 20 }))}
-                  placeholder="20"
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, width: parseInt(text) || 16 }))}
+                  placeholder="16"
                   keyboardType="numeric"
                 />
               </View>
@@ -215,8 +247,8 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 <TextInput
                   style={styles.input}
                   value={formData.height.toString()}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, height: parseInt(text) || 20 }))}
-                  placeholder="20"
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, height: parseInt(text) || 16 }))}
+                  placeholder="16"
                   keyboardType="numeric"
                 />
               </View>
@@ -243,7 +275,73 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 )}
                 <Text style={styles.tilesetPreviewLabel}>แตะเพื่อเปลี่ยน Tileset</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tileSelectorButton, { marginTop: 8 }]}
+                onPress={() => setShowTileSelector(true)}
+              >
+                {selectedTileX !== undefined && selectedTileY !== undefined ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 32, height: 32, overflow: 'hidden', borderWidth: 1, borderColor: '#fff' }}>
+                      {selectedTileset && getTilesetImageSource(selectedTileset) && tilesetDimensions && (
+                        <Image
+                          source={getTilesetImageSource(selectedTileset)!}
+                          style={{
+                            width: tilesetDimensions.width,
+                            height: tilesetDimensions.height,
+                            transform: [
+                              { translateX: -selectedTileX * 32 },
+                              { translateY: -selectedTileY * 32 }
+                            ]
+                          }}
+                        />
+                      )}
+                    </View>
+                    <Text style={styles.tileSelectorButtonText}>
+                      เลือก Tile: ({selectedTileX}, {selectedTileY})
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.tileSelectorButtonText}>เลือกรูปจาก Tileset</Text>
+                )}
+              </TouchableOpacity>
             </View>
+
+            <Modal visible={showTileSelector} transparent animationType="fade">
+              <View style={styles.fullScreenOverlay}>
+                <View style={styles.tileSelectorContainer}>
+                  <View style={styles.header}>
+                    <Text style={styles.title}>เลือก Tile (32x32)</Text>
+                    <TouchableOpacity onPress={() => setShowTileSelector(false)} style={styles.closeButton}>
+                      <Text style={styles.closeButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ flex: 1, padding: 10 }} contentContainerStyle={{ alignItems: 'center' }}>
+                    <ScrollView horizontal>
+                      <TouchableOpacity
+                        activeOpacity={1}
+                        onPress={(e) => {
+                          const { locationX, locationY } = e.nativeEvent;
+                          const x = Math.floor(locationX / 32);
+                          const y = Math.floor(locationY / 32);
+                          setSelectedTileX(x);
+                          setSelectedTileY(y);
+                          setShowTileSelector(false);
+                        }}
+                      >
+                        {selectedTileset && getTilesetImageSource(selectedTileset) && (
+                          <Image
+                            source={getTilesetImageSource(selectedTileset)!}
+                            style={{ width: tilesetDimensions?.width, height: tilesetDimensions?.height }}
+                          />
+                        )}
+                        {/* Grid Overlay (Optional, could be performance heavy for large images) */}
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </ScrollView>
+                </View>
+              </View>
+            </Modal>
 
             {showTilesetPicker && (
               <View style={styles.tilesetPicker}>
@@ -319,7 +417,23 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                       ]}
                       onPress={() => updateTile(tile.x, tile.y)}
                     >
-                      <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
+                      {tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) ? (
+                        <View style={{ width: 32, height: 32, overflow: 'hidden' }}>
+                          <Image
+                            source={getTilesetImageSource(tile.tileset_id)!}
+                            style={{
+                              width: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.width : 512,
+                              height: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.height : 512,
+                              transform: [
+                                { translateX: -(tile.tileX || 0) * 32 },
+                                { translateY: -(tile.tileY || 0) * 32 }
+                              ]
+                            }}
+                          />
+                        </View>
+                      ) : (
+                        <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -388,7 +502,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
             <View style={styles.monsterList}>
               {formData.monsters.map((monster, index) => (
                 <View key={index} style={styles.monsterItem}>
-                  <Text style={styles.monsterText}>Template ID: {monster.template_id} ที่ ({monster.x}, {monster.y})</Text>
+                  <Text style={styles.monsterText}>NPC ID: {monster.id} ที่ ({monster.x}, {monster.y})</Text>
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => setFormData(prev => ({
@@ -405,7 +519,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => {
-                const newMonster = { template_id: 0, x: Math.floor(formData.width / 2), y: Math.floor(formData.height / 2) };
+                const newMonster = { id: 0, x: Math.floor(formData.width / 2), y: Math.floor(formData.height / 2) };
                 setFormData(prev => ({ ...prev, monsters: [...prev.monsters, newMonster] }));
               }}
             >
@@ -610,11 +724,11 @@ const styles = StyleSheet.create({
   mapGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 1,
+    borderColor: '#333',
   },
   mapTile: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -707,5 +821,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  tileSelectorButton: {
+    backgroundColor: '#3b82f6',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  tileSelectorButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  fullScreenOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tileSelectorContainer: {
+    width: '95%',
+    height: '90%',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
 });

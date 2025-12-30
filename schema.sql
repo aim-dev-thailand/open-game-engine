@@ -20,6 +20,7 @@ CREATE TABLE players (
     id VARCHAR(64) PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     username VARCHAR(50) UNIQUE NOT NULL,
+    role user_role DEFAULT 'user',
 
     -- Character Stats
     x FLOAT DEFAULT 0,

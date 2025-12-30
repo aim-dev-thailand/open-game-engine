@@ -36,7 +36,7 @@ const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
 };
 
 const styles = StyleSheet.create({
-    container: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center' },
+    container: { width: 100, height: 100, justifyContent: 'center', alignItems: 'center' },
     base: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.2)', position: 'absolute' },
     knob: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
 });

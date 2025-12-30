@@ -92,7 +92,7 @@ export default function Register({ onBackToLogin, onRegisterSuccess }: RegisterP
                     {/* Register Box with Gradient */}
                     <View style={[styles.registerBoxShadow, isLandscape && styles.registerBoxShadowLandscape]}>
                         <LinearGradient
-                            colors={['#FF1B6B', '#FF6B3D']}
+                            colors={['#1b32ffff', '#FF6B3D']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={[styles.registerBoxOuter, isLandscape && styles.registerBoxOuterLandscape]}
@@ -140,23 +140,25 @@ export default function Register({ onBackToLogin, onRegisterSuccess }: RegisterP
                                     autoCapitalize="none"
                                 />
 
-                                <TouchableOpacity
-                                    style={[styles.registerButton, isRegistering && styles.registerButtonDisabled, isLandscape && styles.registerButtonLandscape]}
-                                    onPress={handleRegister}
-                                    disabled={isRegistering}
-                                >
-                                    <Text style={[styles.registerButtonText, isLandscape && styles.registerButtonTextLandscape]}>
-                                        {isRegistering ? "Loading..." : "ลงทะเบียน"}
-                                    </Text>
-                                </TouchableOpacity>
+                                <View style={{ width: '100%', flexDirection: 'row', gap: '6%', height: 46 }}>
+                                    <TouchableOpacity
+                                        style={[styles.registerButton, isRegistering && styles.registerButtonDisabled, isLandscape && styles.registerButtonLandscape]}
+                                        onPress={handleRegister}
+                                        disabled={isRegistering}
+                                    >
+                                        <Text style={[styles.registerButtonText, isLandscape && styles.registerButtonTextLandscape]}>
+                                            {isRegistering ? "Loading..." : "Confirm"}
+                                        </Text>
+                                    </TouchableOpacity>
 
-                                {/* Back to Login Button */}
-                                <TouchableOpacity
-                                    style={[styles.backButton, isLandscape && styles.backButtonLandscape]}
-                                    onPress={onBackToLogin}
-                                >
-                                    <Text style={[styles.backButtonText, isLandscape && styles.backButtonTextLandscape]}>กลับไปหน้าเข้าสู่ระบบ</Text>
-                                </TouchableOpacity>
+                                    {/* Back to Login Button */}
+                                    <TouchableOpacity
+                                        style={[styles.backButton, isLandscape && styles.backButtonLandscape]}
+                                        onPress={onBackToLogin}
+                                    >
+                                        <Text style={[styles.backButtonText, isLandscape && styles.backButtonTextLandscape]}>Back</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </LinearGradient>
                     </View>
@@ -214,7 +216,7 @@ const styles = StyleSheet.create({
         padding: 6,
     },
     registerBoxInner: {
-        backgroundColor: '#FF9D6B',
+        backgroundColor: '#000',
         borderRadius: 32,
         padding: 30,
         paddingVertical: 40,
@@ -282,8 +284,8 @@ const styles = StyleSheet.create({
     },
     registerButton: {
         backgroundColor: '#45C4F0',
-        paddingVertical: 14,
-        paddingHorizontal: 60,
+        paddingVertical: 12,
+        paddingHorizontal: 30,
         borderRadius: 12,
         marginTop: 10,
         shadowColor: '#000',
@@ -294,10 +296,10 @@ const styles = StyleSheet.create({
     },
     registerButtonLandscape: {
         paddingVertical: 8,
-        paddingHorizontal: 50,
+        paddingHorizontal: 25,
         borderRadius: 10,
-        marginTop: 6,
-        width: 200,
+        marginTop: 10,
+        width: '47%',
         display: 'flex',
         alignItems: 'center',
     },
@@ -331,7 +333,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 25,
         borderRadius: 10,
         marginTop: 10,
-        width: 200,
+        width: '47%',
         display: 'flex',
         alignItems: 'center',
     },

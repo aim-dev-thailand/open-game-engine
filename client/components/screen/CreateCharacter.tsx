@@ -14,6 +14,7 @@ interface ClassData {
     id: number;
     name: string;
     description: string;
+    sprite: string;
     str: number;
     dex: number;
     agi: number;
@@ -131,7 +132,7 @@ export default function CreateCharacter({ username, onCharacterCreated, onBackTo
                 {/* Create Character Box with Gradient */}
                 <View style={[styles.createBoxShadow, isLandscape && styles.createBoxShadowLandscape]}>
                     <LinearGradient
-                        colors={['#FF1B6B', '#FF6B3D']}
+                        colors={['#1b32ffff', '#FF6B3D']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={[styles.createBoxOuter, isLandscape && styles.createBoxOuterLandscape]}
@@ -188,7 +189,13 @@ export default function CreateCharacter({ username, onCharacterCreated, onBackTo
                                 </View>
                                 <View>
                                     <View style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 8, paddingLeft: 48 }}>
-                                        <Image source={{ uri: CHARACTERS[0] }} resizeMode="contain" style={{ width: 64, height: 100, borderColor: 'black', borderWidth: 1 }} />
+                                        <View style={{ width: 64, height: 100, overflow: 'hidden', borderColor: 'black', borderWidth: 1 }}>
+                                            <Image
+                                                source={CHARACTERS[selectedClass?.sprite ? Number(selectedClass?.sprite) : 1] || CHARACTERS[1]}
+                                                resizeMode="stretch"
+                                                style={{ width: '400%', height: '400%' }}
+                                            />
+                                        </View>
                                     </View>
                                     <View style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center' }}>
                                         <TouchableOpacity
@@ -252,7 +259,7 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     createBoxInner: {
-        backgroundColor: '#FF9D6B',
+        backgroundColor: '#000',
         borderRadius: 32,
         padding: 30,
         paddingVertical: 40,

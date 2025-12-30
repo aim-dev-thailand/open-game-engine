@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions, Image } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useEffect, useRef } from "react";
 import { WS_API } from "@/env";
 import { CharacterData } from "@/model/character";
+import { CHARACTERS } from "@/assets/characters";
 
 interface CharacterListProps {
     username: string;
@@ -69,7 +70,7 @@ export default function CharacterList({ username, onSelectCharacter, onCreateNew
                 {/* Character List Box with Gradient */}
                 <View style={[styles.listBoxShadow, isLandscape && styles.listBoxShadowLandscape]}>
                     <LinearGradient
-                        colors={['#FF1B6B', '#FF6B3D']}
+                        colors={['#1b32ffff', '#FF6B3D']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={[styles.listBoxOuter, isLandscape && styles.listBoxOuterLandscape]}
@@ -96,38 +97,53 @@ export default function CharacterList({ username, onSelectCharacter, onCreateNew
                                             style={[styles.characterCard, isLandscape && styles.characterCardLandscape]}
                                             onPress={() => onSelectCharacter(character)}
                                         >
-                                            <View style={styles.characterHeader}>
-                                                <Text style={[styles.characterName, isLandscape && styles.characterNameLandscape]}>{character.character_name}</Text>
-                                                <Text style={[styles.characterLevel, isLandscape && styles.characterLevelLandscape]}>Lv. {character.level}</Text>
-                                            </View>
-                                            <Text style={[styles.characterClass, isLandscape && styles.characterClassLandscape]}>{character.class_name}</Text>
-                                            <View style={[styles.hpBar, isLandscape && styles.hpBarLandscape]}>
-                                                <View style={[styles.hpBarFill, { width: `${(character.hp / character.max_hp) * 100}%` }]} />
-                                                <Text style={[styles.hpText, isLandscape && styles.hpTextLandscape]}>HP: {character.hp}/{character.max_hp}</Text>
-                                            </View>
-                                            <View style={styles.statsContainer}>
-                                                <Text style={[styles.statsText, isLandscape && styles.statsTextLandscape]}>STR: {character.str} | DEX: {character.dex} | AGI: {character.agi}</Text>
-                                                <Text style={[styles.statsText, isLandscape && styles.statsTextLandscape]}>VIT: {character.vit} | INT: {character.int} | LUK: {character.luk}</Text>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'flex-start', gap: 10 }}>
+                                                <View style={{ width: '20%', alignItems: 'center' }}>
+                                                    <View style={{ width: 64, height: 100, overflow: 'hidden', borderColor: 'black', borderWidth: 1 }}>
+                                                        <Image
+                                                            source={CHARACTERS[character?.sprite_id ? Number(character?.sprite_id) : 1] || CHARACTERS[1]}
+                                                            resizeMode="stretch"
+                                                            style={{ width: '400%', height: '400%' }}
+                                                        />
+                                                    </View>
+                                                </View>
+                                                <View style={{ width: '75%' }}>
+                                                    <View style={styles.characterHeader}>
+                                                        <Text style={[styles.characterName, isLandscape && styles.characterNameLandscape]}>{character.character_name}</Text>
+                                                        <Text style={[styles.characterLevel, isLandscape && styles.characterLevelLandscape]}>Lv. {character.level}</Text>
+                                                    </View>
+                                                    <Text style={[styles.characterClass, isLandscape && styles.characterClassLandscape]}>{character.class_name}</Text>
+                                                    <View style={[styles.hpBar, isLandscape && styles.hpBarLandscape]}>
+                                                        <View style={[styles.hpBarFill, { width: `${(character.hp / character.max_hp) * 100}%` }]} />
+                                                        <Text style={[styles.hpText, isLandscape && styles.hpTextLandscape]}>HP: {character.hp}/{character.max_hp}</Text>
+                                                    </View>
+                                                    <View style={styles.statsContainer}>
+                                                        <Text style={[styles.statsText, isLandscape && styles.statsTextLandscape]}>STR: {character.str} | DEX: {character.dex} | AGI: {character.agi}</Text>
+                                                        <Text style={[styles.statsText, isLandscape && styles.statsTextLandscape]}>VIT: {character.vit} | INT: {character.int} | LUK: {character.luk}</Text>
+                                                    </View>
+                                                </View>
                                             </View>
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>
                             )}
 
-                            <TouchableOpacity
-                                style={[styles.createButton, isLandscape && styles.createButtonLandscape]}
-                                onPress={onCreateNewCharacter}
-                            >
-                                <Text style={[styles.createButtonText, isLandscape && styles.createButtonTextLandscape]}>สร้างตัวละครใหม่</Text>
-                            </TouchableOpacity>
+                            <View style={{ width: '100%', flexDirection: 'row', gap: '6%', height: 46, paddingHorizontal: 10, marginTop: -20, marginBottom: 10 }}>
+                                <TouchableOpacity
+                                    style={[styles.createButton]}
+                                    onPress={onCreateNewCharacter}
+                                >
+                                    <Text style={[styles.createButtonText]}>สร้างตัวละครใหม่</Text>
+                                </TouchableOpacity>
+
+                                {/* Logout Button */}
+                                <TouchableOpacity style={[styles.logoutButton]} onPress={onLogout}>
+                                    <Text style={[styles.logoutButtonText]}>ออกจากระบบ</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </LinearGradient>
                 </View>
-
-                {/* Logout Button */}
-                <TouchableOpacity style={[styles.logoutButton, isLandscape && styles.logoutButtonLandscape]} onPress={onLogout}>
-                    <Text style={[styles.logoutButtonText, isLandscape && styles.logoutButtonTextLandscape]}>ออกจากระบบ</Text>
-                </TouchableOpacity>
             </View>
         </ScrollView>
     );
@@ -143,12 +159,12 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#1a1a2e",
-        paddingVertical: 40,
-        paddingHorizontal: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
     },
     loadingText: {
         color: "#fff",
-        marginTop: 20,
+        marginTop: 10,
         fontSize: 16,
     },
     listBoxShadow: {
@@ -164,7 +180,7 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     listBoxInner: {
-        backgroundColor: '#FF9D6B',
+        backgroundColor: '#000',
         borderRadius: 32,
         padding: 30,
         paddingVertical: 40,
@@ -284,8 +300,8 @@ const styles = StyleSheet.create({
     },
     createButton: {
         backgroundColor: '#45C4F0',
-        paddingVertical: 14,
-        paddingHorizontal: 40,
+        paddingVertical: 8,
+        paddingHorizontal: 30,
         borderRadius: 12,
         marginTop: 10,
         shadowColor: '#000',
@@ -293,6 +309,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 6,
         elevation: 6,
+        width: '47%',
+        display: 'flex',
+        alignItems: 'center',
     },
     createButtonText: {
         color: '#fff',
@@ -302,15 +321,18 @@ const styles = StyleSheet.create({
     },
     logoutButton: {
         backgroundColor: '#FF3B3B',
-        paddingVertical: 12,
+        paddingVertical: 8,
         paddingHorizontal: 30,
         borderRadius: 12,
-        marginTop: 30,
+        marginTop: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 6,
         elevation: 6,
+        width: '47%',
+        display: 'flex',
+        alignItems: 'center',
     },
     logoutButtonText: {
         color: '#fff',
@@ -339,8 +361,8 @@ const styles = StyleSheet.create({
     },
     listBoxInnerLandscape: {
         borderRadius: 20,
-        padding: 20,
-        paddingVertical: 25,
+        padding: 10,
+        paddingVertical: 10,
         minWidth: 500,
         maxWidth: 650,
     },
@@ -353,7 +375,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     emptyContainerLandscape: {
-        paddingVertical: 25,
+        paddingVertical: 15,
     },
     emptyTextLandscape: {
         fontSize: 14,

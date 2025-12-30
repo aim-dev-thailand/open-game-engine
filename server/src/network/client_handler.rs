@@ -58,8 +58,7 @@ pub async fn handle_client(
                             break;
                         }
                         Some("save_npc") => {
-                            handle_save_npc(&mut ws, &npcs, &data).await;
-                            break;
+                            handle_save_npc(&mut ws, &pool, &npcs, &data).await;
                         }
                         Some("save_class") => {
                             handle_save_class(&mut ws, &classes, &data).await;
@@ -70,7 +69,7 @@ pub async fn handle_client(
                             break;
                         }
                         Some("save_map") => {
-                            handle_save_map(&mut ws, &maps, &data).await;
+                            handle_save_map(&mut ws, &pool, &maps, &data).await;
                             break;
                         }
                         Some("load_item") => {
@@ -89,10 +88,11 @@ pub async fn handle_client(
                             handle_load_maps(&mut ws, &maps).await;
                         }
                         Some("create_character") => {
-                            handle_create_character(&mut ws, &players, &classes, &data).await;
+                            handle_create_character(&mut ws, &pool, &players, &classes, &data)
+                                .await;
                         }
                         Some("load_characters") => {
-                            handle_load_characters(&mut ws, &players, &data).await;
+                            handle_load_characters(&mut ws, &pool, &data).await;
                         }
                         Some("logout") => {
                             players.remove(&player_id);
@@ -399,8 +399,100 @@ async fn handle_save_item(
     }
 }
 
+async fn handle_save_map(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    pool: &PgPool,
+    maps: &MapsMap,
+    data: &serde_json::Value,
+) {
+    if let Some(map_data) = data.get("map") {
+        if let Ok(map_obj) = serde_json::from_value::<MapData>(map_data.clone()) {
+            let id = map_obj.id.unwrap_or(maps.len() as i32 + 1);
+            let map_name = map_obj.name.clone();
+
+            // Ensure ID is set
+            let mut map_to_save = map_obj.clone();
+            if map_to_save.id.is_none() {
+                map_to_save.id = Some(id);
+            }
+
+            // Serialize complex fields
+            let tiles_json =
+                serde_json::to_value(&map_to_save.tiles).unwrap_or(serde_json::json!([]));
+            let spawn_points_json =
+                serde_json::to_value(&map_to_save.spawn_points).unwrap_or(serde_json::json!([]));
+            let npcs_json =
+                serde_json::to_value(&map_to_save.npcs).unwrap_or(serde_json::json!([]));
+            let monsters_json =
+                serde_json::to_value(&map_to_save.monsters).unwrap_or(serde_json::json!([]));
+
+            // Database UPSERT
+            let result = sqlx::query(
+                r#"
+                INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    width = EXCLUDED.width,
+                    height = EXCLUDED.height,
+                    tiles = EXCLUDED.tiles,
+                    spawn_points = EXCLUDED.spawn_points,
+                    npcs = EXCLUDED.npcs,
+                    monsters = EXCLUDED.monsters,
+                    updated_at = NOW()
+                "#
+            )
+            .bind(id)
+            .bind(&map_to_save.name)
+            .bind(&map_to_save.description)
+            .bind(map_to_save.width)
+            .bind(map_to_save.height)
+            .bind(&tiles_json)
+            .bind(&spawn_points_json)
+            .bind(&npcs_json)
+            .bind(&monsters_json)
+            .execute(pool)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    maps.insert(id, map_to_save);
+                    println!("บันทึกแผนที่: {}", map_name);
+
+                    let _ = ws
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "save_map_success",
+                                "message": "บันทึกแผนที่สำเร็จ",
+                                "map_id": id
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
+                }
+                Err(e) => {
+                    eprintln!("Error saving map to DB: {:?}", e);
+                    let _ = ws
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "save_map_error",
+                                "message": "เกิดข้อผิดพลาดในการบันทึกแผนที่"
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
+                }
+            }
+        }
+    }
+}
+
 async fn handle_save_npc(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    pool: &PgPool,
     npcs: &NpcsMap,
     data: &serde_json::Value,
 ) {
@@ -408,20 +500,115 @@ async fn handle_save_npc(
         if let Ok(npc) = serde_json::from_value::<NpcData>(npc_data.clone()) {
             let id = npc.id.unwrap_or(npcs.len() as i32 + 1);
             let npc_name = npc.name.clone();
-            npcs.insert(id, npc);
-            println!("บันทึก NPC: {}", npc_name);
 
-            let _ = ws
-                .send(Message::Text(
-                    serde_json::json!({
-                        "type": "save_npc_success",
-                        "message": "บันทึก NPC สำเร็จ",
-                        "npc_id": id
-                    })
-                    .to_string()
-                    .into(),
-                ))
-                .await;
+            // Ensure ID is set
+            let mut npc_to_save = npc.clone();
+            if npc_to_save.id.is_none() {
+                npc_to_save.id = Some(id);
+            }
+
+            // Serialize complex fields
+            let dialogue_json =
+                serde_json::to_value(&npc_to_save.dialogue).unwrap_or(serde_json::json!([]));
+            let shop_items_json =
+                serde_json::to_value(&npc_to_save.shop_items).unwrap_or(serde_json::json!([]));
+            let quests_json =
+                serde_json::to_value(&npc_to_save.quests).unwrap_or(serde_json::json!([]));
+            let position_json = serde_json::to_value(&npc_to_save.position)
+                .unwrap_or(serde_json::json!({ "x": 0, "y": 0 }));
+
+            // Database UPSERT
+            let result = sqlx::query(
+                r#"
+                INSERT INTO npcs (
+                    id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed,
+                    is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id,
+                    npc_type, crit_rate, dodge_value, hit_value, attack_first
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    sprite_id = EXCLUDED.sprite_id,
+                    level = EXCLUDED.level,
+                    hp = EXCLUDED.hp,
+                    max_hp = EXCLUDED.max_hp,
+                    attack = EXCLUDED.attack,
+                    defense = EXCLUDED.defense,
+                    move_speed = EXCLUDED.move_speed,
+                    is_hostile = EXCLUDED.is_hostile,
+                    can_trade = EXCLUDED.can_trade,
+                    can_quest = EXCLUDED.can_quest,
+                    dialogue = EXCLUDED.dialogue,
+                    shop_items = EXCLUDED.shop_items,
+                    quests = EXCLUDED.quests,
+                    position = EXCLUDED.position,
+                    map_id = EXCLUDED.map_id,
+                    npc_type = EXCLUDED.npc_type,
+                    crit_rate = EXCLUDED.crit_rate,
+                    dodge_value = EXCLUDED.dodge_value,
+                    hit_value = EXCLUDED.hit_value,
+                    attack_first = EXCLUDED.attack_first,
+                    updated_at = NOW()
+                "#
+            )
+            .bind(id)
+            .bind(&npc_to_save.name)
+            .bind(&npc_to_save.description)
+            .bind(&npc_to_save.sprite_id)
+            .bind(npc_to_save.level)
+            .bind(npc_to_save.hp)
+            .bind(npc_to_save.max_hp)
+            .bind(npc_to_save.attack)
+            .bind(npc_to_save.defense)
+            .bind(npc_to_save.move_speed)
+            .bind(npc_to_save.is_hostile)
+            .bind(npc_to_save.can_trade)
+            .bind(npc_to_save.can_quest)
+            .bind(&dialogue_json)
+            .bind(&shop_items_json)
+            .bind(&quests_json)
+            .bind(&position_json)
+            .bind(npc_to_save.map_id)
+            .bind(&npc_to_save.npc_type)
+            .bind(npc_to_save.crit_rate)
+            .bind(npc_to_save.dodge_value)
+            .bind(npc_to_save.hit_value)
+            .bind(npc_to_save.attack_first)
+            .execute(pool)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    npcs.insert(id, npc_to_save);
+                    println!("บันทึก NPC: {}", npc_name);
+
+                    let _ = ws
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "save_npc_success",
+                                "message": "บันทึก NPC สำเร็จ",
+                                "npc_id": id
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
+                }
+                Err(e) => {
+                    eprintln!("Error saving NPC to DB: {:?}", e);
+                    let _ = ws
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "save_npc_error",
+                                "message": "เกิดข้อผิดพลาดในการบันทึก NPC"
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
+                }
+            }
         }
     }
 }
@@ -444,33 +631,6 @@ async fn handle_save_skill(
                         "type": "save_skill_success",
                         "message": "บันทึกสกิลสำเร็จ",
                         "skill_id": id
-                    })
-                    .to_string()
-                    .into(),
-                ))
-                .await;
-        }
-    }
-}
-
-async fn handle_save_map(
-    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-    maps: &MapsMap,
-    data: &serde_json::Value,
-) {
-    if let Some(map_data) = data.get("map") {
-        if let Ok(map) = serde_json::from_value::<MapData>(map_data.clone()) {
-            let id = map.id.unwrap_or(maps.len() as i32 + 1);
-            let map_name = map.name.clone();
-            maps.insert(id, map);
-            println!("บันทึกแผนที่: {}", map_name);
-
-            let _ = ws
-                .send(Message::Text(
-                    serde_json::json!({
-                        "type": "save_map_success",
-                        "message": "บันทึกแผนที่สำเร็จ",
-                        "map_id": id
                     })
                     .to_string()
                     .into(),
@@ -666,6 +826,7 @@ async fn handle_load_classes(
 /// จัดการการสร้างตัวละคร
 async fn handle_create_character(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    pool: &PgPool,
     players: &PlayersMap,
     classes: &ClassesMap,
     data: &serde_json::Value,
@@ -783,66 +944,150 @@ async fn handle_create_character(
         },
     };
 
-    players.insert(character_id.clone(), new_player);
+    // บันทึกข้อมูลลงฐานข้อมูล
+    // let learned_skills_json =
+    //     serde_json::to_string(&new_player.learned_skills).unwrap_or("[]".to_string());
+    // let active_statuses_json =
+    //     serde_json::to_string(&new_player.active_statuses).unwrap_or("[]".to_string());
+    // let equipment_json = serde_json::to_string(&new_player.equipment).unwrap_or("{}".to_string());
 
-    println!(
-        "สร้างตัวละครใหม่: {} (อาชีพ: {}) สำหรับผู้เล่น: {}",
-        character_name, class_data.name, username
-    );
+    let insert_result = sqlx::query(
+        r#"
+        INSERT INTO players (
+            id, username, x, y, hp, max_hp, mp, max_mp,
+            base_atk, base_def, move_speed, accuracy, evasion, crit_rate,
+            str, dex, agi, int, luk, vit,
+            level, current_exp, stat_points, skill_points,
+            role
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::user_role)
+        "#
+    )
+    .bind(&new_player.id)
+    .bind(&new_player.username)
+    .bind(new_player.x)
+    .bind(new_player.y)
+    .bind(new_player.hp)
+    .bind(new_player.max_hp)
+    .bind(new_player.mp)
+    .bind(new_player.max_mp)
+    .bind(new_player.base_atk)
+    .bind(new_player.base_def)
+    .bind(new_player.move_speed)
+    .bind(new_player.accuracy)
+    .bind(new_player.evasion)
+    .bind(new_player.crit_rate)
+    .bind(new_player.strength)
+    .bind(new_player.dex)
+    .bind(new_player.agi)
+    .bind(new_player.intelligence)
+    .bind(new_player.luk)
+    .bind(new_player.vit)
+    .bind(new_player.level)
+    .bind(new_player.current_exp)
+    .bind(new_player.stat_points)
+    .bind(new_player.skill_points)
+    .bind(&new_player.role)
+    .execute(pool)
+    .await;
 
-    let _ = ws
-        .send(Message::Text(
-            serde_json::json!({
-                "type": "create_character_success",
-                "message": "สร้างตัวละครสำเร็จ",
-                "character_id": character_id
-            })
-            .to_string()
-            .into(),
-        ))
-        .await;
+    match insert_result {
+        Ok(_) => {
+            players.insert(character_id.clone(), new_player);
+
+            println!(
+                "สร้างตัวละครใหม่: {} (อาชีพ: {}) สำหรับผู้เล่น: {}",
+                character_name, class_data.name, username
+            );
+
+            let _ = ws
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "create_character_success",
+                        "message": "สร้างตัวละครสำเร็จ",
+                        "character_id": character_id
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+        Err(e) => {
+            eprintln!("Error creating character in DB: {:?}", e);
+            let _ = ws
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "create_character_error",
+                        "message": "เกิดข้อผิดพลาดในการบันทึกข้อมูลตัวละคร"
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+    }
 }
 
 /// จัดการการโหลดรายการตัวละคร
 async fn handle_load_characters(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-    players: &PlayersMap,
+    pool: &PgPool,
     data: &serde_json::Value,
 ) {
     let _username = data["username"].as_str().unwrap_or("");
+    // ในอนาคตควรกรองด้วย username หรือ user_id แต่ตอนนี้ดึงทั้งหมดตาม logic เดิม
 
-    // TODO: ในระบบจริงควรดึงข้อมูลจากฐานข้อมูลโดยใช้ user_id
-    // สำหรับตอนนี้เราจะส่งรายการตัวละครทั้งหมด (ในระบบจริงควรกรองตาม username หรือ user_id)
+    let characters_result = sqlx::query(
+        "SELECT id, username, level, hp, max_hp, str, dex, agi, vit, int, luk FROM players",
+    )
+    .fetch_all(pool)
+    .await;
 
-    let characters: Vec<serde_json::Value> = players
-        .iter()
-        .map(|entry| {
-            let player = entry.value();
-            serde_json::json!({
-                "id": player.id,
-                "character_name": player.username,
-                "class_name": "นักพจญภัย", // TODO: ควรเก็บ class_name ใน PlayerState
-                "level": player.level,
-                "hp": player.hp,
-                "max_hp": player.max_hp,
-                "str": player.strength,
-                "dex": player.dex,
-                "agi": player.agi,
-                "vit": player.vit,
-                "int": player.intelligence,
-                "luk": player.luk,
-            })
-        })
-        .collect();
+    match characters_result {
+        Ok(rows) => {
+            let characters: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    serde_json::json!({
+                        "id": row.get::<String, _>("id"),
+                        "character_name": row.get::<String, _>("username"),
+                        "class_name": "นักพจญภัย", // TODO: จอยตาราง classes เพื่อดึงชื่ออาชีพ
+                        "level": row.get::<i32, _>("level"),
+                        "hp": row.get::<i32, _>("hp"),
+                        "max_hp": row.get::<i32, _>("max_hp"),
+                        "str": row.get::<i32, _>("str"),
+                        "dex": row.get::<i32, _>("dex"),
+                        "agi": row.get::<i32, _>("agi"),
+                        "vit": row.get::<i32, _>("vit"),
+                        "int": row.get::<i32, _>("int"),
+                        "luk": row.get::<i32, _>("luk"),
+                    })
+                })
+                .collect();
 
-    let _ = ws
-        .send(Message::Text(
-            serde_json::json!({
-                "type": "characters_data",
-                "characters": characters
-            })
-            .to_string()
-            .into(),
-        ))
-        .await;
+            let _ = ws
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "characters_data",
+                        "characters": characters
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+        Err(e) => {
+            eprintln!("Error loading characters from DB: {:?}", e);
+            let _ = ws
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "characters_data",
+                        "characters": []
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+    }
 }

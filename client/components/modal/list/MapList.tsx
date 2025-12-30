@@ -10,7 +10,7 @@ type MapType = {
   tiles: any[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { template_id: number; x: number; y: number }[];
+  monsters: { id: number; x: number; y: number }[];
 };
 
 type MapListProps = {

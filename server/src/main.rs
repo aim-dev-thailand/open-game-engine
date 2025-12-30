@@ -66,6 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // สร้างงานพื้นหลัง - คำสั่งผู้ดูแล
+    let pool_clone = pool.clone();
     let players_clone = players.clone();
     let items_clone = items.clone();
     let maps_clone = maps.clone();
@@ -73,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let skills_clone = skills.clone();
     tokio::spawn(async move {
         admin_command_loop(
+            pool_clone,
             players_clone,
             items_clone,
             maps_clone,

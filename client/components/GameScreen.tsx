@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal } from 'react-native';
 import { GLView } from 'expo-gl';
-import { Renderer } from 'expo-three';
+import { Renderer, TextureLoader } from 'expo-three';
 import { WS_API } from '@/env';
+import { CHARACTERS } from '@/assets/characters';
 import { CharacterData } from '@/model/character';
-import * as THREE from 'three'; // If you see type errors, run: npm i --save-dev @types/three
+import * as THREE from 'three';
 import Joypad from './ui/Joypad';
 import ActionPad from './ui/ActionPad';
 import DamageFloater from './ui/DamageFloater';
@@ -59,7 +60,7 @@ type MapType = {
   tiles: any[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { template_id: number; x: number; y: number }[];
+  monsters: { id: number; x: number; y: number }[];
 };
 
 type NpcType = {
@@ -196,11 +197,54 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     const grid = new THREE.GridHelper(1000, 50, 0x444444, 0x111111);
     scene.add(grid);
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.y = 0.5;
-    scene.add(cube);
+    const spriteId = character.sprite_id ? Number(character.sprite_id) : 1;
+    const spriteAsset = CHARACTERS[spriteId] || CHARACTERS[1];
+
+    const textureLoader = new TextureLoader();
+    const texture = textureLoader.load(spriteAsset);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+
+    // Sprite is 4x4, we want top-left
+    // UVs are 0,0 (bottom-left) to 1,1 (top-right)
+    // Top-left 1/4 means U: 0-0.25, V: 0.75-1.0
+
+    // Using PlaneGeometry to control UVs easily
+    const geometry = new THREE.PlaneGeometry(1, 1.5);
+
+    // Update UVs for top-left frame
+    const uvs = geometry.attributes.uv;
+    // 0: top-left (0, 1) -> (0, 1)
+    // 1: top-right (1, 1) -> (0.25, 1)
+    // 2: bottom-left (0, 0) -> (0, 0.75)
+    // 3: bottom-right (1, 0) -> (0.25, 0.75)
+
+    // Standard PlaneGeometry UV mapping:
+    // 0: (0, 1) Top Left
+    // 1: (1, 1) Top Right
+    // 2: (0, 0) Bottom Left
+    // 3: (1, 0) Bottom Right
+
+    // We want:
+    // Top Left: (0, 1)
+    // Top Right: (0.25, 1)
+    // Bottom Left: (0, 0.75)
+    // Bottom Right: (0.25, 0.75)
+
+    uvs.setXY(0, 0, 1.0); // Top Left
+    uvs.setXY(1, 0.25, 1.0); // Top Right
+    uvs.setXY(2, 0, 0.75); // Bottom Left
+    uvs.setXY(3, 0.25, 0.75); // Bottom Right
+
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+
+    const playerMesh = new THREE.Mesh(geometry, material);
+    playerMesh.position.y = 0.75;
+    scene.add(playerMesh);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
@@ -470,14 +514,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     zIndex: 10,
   },
   adminButtonText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 14,
     fontWeight: 'bold',
   },

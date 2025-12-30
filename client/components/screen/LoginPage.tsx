@@ -1,4 +1,4 @@
-import { StyleSheet, Text, TextInput, View, TouchableOpacity, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, TextInput, View, TouchableOpacity, useWindowDimensions, Image } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState, useEffect, useRef } from "react";
 import { WS_API } from "@/env";
@@ -86,13 +86,13 @@ export default function LoginPage({ username, setUsername, setRole, setIsInGame,
                 {/* Login Box with Gradient */}
                 <View style={[styles.loginBoxShadow, isLandscape && styles.loginBoxShadowLandscape]}>
                     <LinearGradient
-                        colors={['#FF1B6B', '#FF6B3D']}
+                        colors={['#1b32ffff', '#FF6B3D']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={[styles.loginBoxOuter, isLandscape && styles.loginBoxOuterLandscape]}
                     >
                         <View style={[styles.loginBoxInner, isLandscape && styles.loginBoxInnerLandscape]}>
-                            <Text style={[styles.title, isLandscape && styles.titleLandscape]}>LOGIN</Text>
+                            <Image source={require('@/assets/icons/logo.png')} style={{ width: 100, height: 100, backgroundColor: 'black', borderRadius: 20, marginBottom: 16 }} />
 
                             {error ? <Text style={[styles.errorText, isLandscape && styles.errorTextLandscape]}>{error}</Text> : null}
 
@@ -121,23 +121,25 @@ export default function LoginPage({ username, setUsername, setRole, setIsInGame,
                                 autoCapitalize="none"
                             />
 
-                            <TouchableOpacity
-                                style={[styles.loginButton, isLoggingIn && styles.loginButtonDisabled, isLandscape && styles.loginButtonLandscape]}
-                                onPress={handleLogin}
-                                disabled={isLoggingIn}
-                            >
-                                <Text style={[styles.loginButtonText, isLandscape && styles.loginButtonTextLandscape]}>
-                                    {isLoggingIn ? "Loading..." : "เข้าสู่ระบบ"}
-                                </Text>
-                            </TouchableOpacity>
+                            <View style={{ width: '100%', flexDirection: 'row', gap: '6%', height: 46 }}>
+                                <TouchableOpacity
+                                    style={[styles.loginButton, isLoggingIn && styles.loginButtonDisabled, isLandscape && styles.loginButtonLandscape]}
+                                    onPress={handleLogin}
+                                    disabled={isLoggingIn}
+                                >
+                                    <Text style={[styles.loginButtonText, isLandscape && styles.loginButtonTextLandscape]}>
+                                        {isLoggingIn ? "Loading..." : "Login"}
+                                    </Text>
+                                </TouchableOpacity>
 
-                            {/* Create Account Button */}
-                            <TouchableOpacity
-                                style={[styles.createAccountButton, isLandscape && styles.createAccountButtonLandscape]}
-                                onPress={onGoToRegister}
-                            >
-                                <Text style={[styles.createAccountText, isLandscape && styles.createAccountTextLandscape]}>สร้างบัญชีใหม่</Text>
-                            </TouchableOpacity>
+                                {/* Create Account Button */}
+                                <TouchableOpacity
+                                    style={[styles.createAccountButton, isLandscape && styles.createAccountButtonLandscape]}
+                                    onPress={onGoToRegister}
+                                >
+                                    <Text style={[styles.createAccountText, isLandscape && styles.createAccountTextLandscape]}>Register</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </LinearGradient>
                 </View>
@@ -181,7 +183,7 @@ const styles = StyleSheet.create({
         padding: 6,
     },
     loginBoxInner: {
-        backgroundColor: '#FF9D6B',
+        backgroundColor: '#000',
         borderRadius: 32,
         padding: 40,
         paddingVertical: 50,
@@ -264,7 +266,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 50,
         borderRadius: 10,
         marginTop: 8,
-        width: 200,
+        width: '47%',
         display: 'flex',
         alignItems: 'center',
     },
@@ -299,7 +301,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         marginTop: 10,
         marginLeft: 0,
-        width: 200,
+        width: '47%',
         display: 'flex',
         alignItems: 'center',
     },
