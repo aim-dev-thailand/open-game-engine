@@ -86,7 +86,7 @@ pub async fn handle_client(
                             handle_load_skills(&mut ws, &skills).await;
                         }
                         Some("load_map") => {
-                            handle_load_maps(&mut ws, &maps).await;
+                            handle_load_maps(&mut ws, &pool).await;
                         }
                         Some("create_character") => {
                             handle_create_character(&mut ws, &pool, &players, &classes, &data)
@@ -258,19 +258,16 @@ async fn ensure_default_map(pool: &PgPool) -> Option<MapData> {
             description: "A starter map".to_string(),
             width: 20,
             height: 20,
-            tiles: serde_json::json!([]), // TODO: Generate basic tiles?
-            spawn_points: vec![serde_json::json!({"x": 10, "y": 10})],
-            npcs: vec![],
-            monsters: vec![],
+            tiles: serde_json::json!([]),
+            spawn_points: serde_json::json!(vec![serde_json::json!({"x": 10, "y": 10})]),
+            npcs: serde_json::json!([]),
         };
 
         let tiles_json = serde_json::to_value(&default_map.tiles).unwrap();
-        let spawn_points_json = serde_json::to_value(&default_map.spawn_points).unwrap();
         let npcs_json = serde_json::to_value(&default_map.npcs).unwrap();
-        let monsters_json = serde_json::to_value(&default_map.monsters).unwrap();
 
-        let _ = sqlx::query(
-            "INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        let result = sqlx::query(
+            "INSERT INTO maps (id, name, description, width, height, tiles, npcs) VALUES ($1, $2, $3, $4, $5, $6, $7)"
         )
         .bind(default_map.id)
         .bind(&default_map.name)
@@ -278,18 +275,22 @@ async fn ensure_default_map(pool: &PgPool) -> Option<MapData> {
         .bind(default_map.width)
         .bind(default_map.height)
         .bind(&tiles_json)
-        .bind(&spawn_points_json)
         .bind(&npcs_json)
-        .bind(&monsters_json)
         .execute(pool)
         .await;
+
+        if let Err(e) = result {
+            println!("Error creating default map: {}", e);
+        }
     }
 
     // ดึงแผนที่แรกมา
-    let map_row = sqlx::query("SELECT id, name, description, width, height, tiles, spawn_points, npcs, monsters FROM maps ORDER BY id LIMIT 1")
-        .fetch_optional(pool)
-        .await
-        .unwrap_or(None);
+    let map_row = sqlx::query(
+        "SELECT id, name, description, width, height, tiles, spawn_points, npcs FROM maps ORDER BY id LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap_or(None);
 
     if let Some(row) = map_row {
         Some(MapData {
@@ -301,7 +302,6 @@ async fn ensure_default_map(pool: &PgPool) -> Option<MapData> {
             tiles: row.get("tiles"),
             spawn_points: row.get("spawn_points"),
             npcs: row.get("npcs"),
-            monsters: row.get("monsters"),
         })
     } else {
         None
@@ -531,14 +531,12 @@ async fn handle_save_map(
                 serde_json::to_value(&map_to_save.spawn_points).unwrap_or(serde_json::json!([]));
             let npcs_json =
                 serde_json::to_value(&map_to_save.npcs).unwrap_or(serde_json::json!([]));
-            let monsters_json =
-                serde_json::to_value(&map_to_save.monsters).unwrap_or(serde_json::json!([]));
 
             // Database UPSERT
             let result = sqlx::query(
                 r#"
-                INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters)
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb)
+                INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     description = EXCLUDED.description,
@@ -547,9 +545,8 @@ async fn handle_save_map(
                     tiles = EXCLUDED.tiles,
                     spawn_points = EXCLUDED.spawn_points,
                     npcs = EXCLUDED.npcs,
-                    monsters = EXCLUDED.monsters,
                     updated_at = NOW()
-                "#
+                "#,
             )
             .bind(id)
             .bind(&map_to_save.name)
@@ -559,7 +556,6 @@ async fn handle_save_map(
             .bind(&tiles_json)
             .bind(&spawn_points_json)
             .bind(&npcs_json)
-            .bind(&monsters_json)
             .execute(pool)
             .await;
 
@@ -801,9 +797,29 @@ async fn handle_load_skills(
 
 async fn handle_load_maps(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-    maps: &MapsMap,
+    pool: &PgPool,
 ) {
-    let maps_vec: Vec<MapData> = maps.iter().map(|entry| entry.value().clone()).collect();
+    // ดึงข้อมูลแผนที่ทั้งหมดจาก database
+    // Note: monsters column removed based on schema fix
+    let maps_rows = sqlx::query("SELECT id, name, description, width, height, tiles, spawn_points, npcs FROM maps ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .unwrap_or(vec![]);
+
+    let maps_vec: Vec<MapData> = maps_rows
+        .into_iter()
+        .map(|row| MapData {
+            id: Some(row.get("id")),
+            name: row.get("name"),
+            description: row.get("description"),
+            width: row.get("width"),
+            height: row.get("height"),
+            tiles: row.get("tiles"),
+            spawn_points: row.get("spawn_points"),
+            npcs: row.get("npcs"),
+        })
+        .collect();
+
     let _ = ws
         .send(Message::Text(
             serde_json::json!({

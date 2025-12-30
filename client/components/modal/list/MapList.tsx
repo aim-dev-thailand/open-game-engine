@@ -25,9 +25,36 @@ export default function MapList({ visible, onClose, onEditMap, wsRef }: MapListP
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      loadMaps();
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'maps_loaded') {
+          console.log(data.maps);
+          setMaps(data.maps);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('Error parsing map list:', e);
+      }
+    };
+
+    if (wsRef.current) {
+      // Use addEventListener if supported, or rely on a global dispatcher if needed.
+      // Since RN WebSocket implementation is standard-compliant:
+      wsRef.current.addEventListener('message', handleMessage);
+
+      // Send request AFTER adding listener
+      setTimeout(() => {
+        loadMaps();
+      }, 1000);
     }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.removeEventListener('message', handleMessage);
+      }
+    };
   }, [visible]);
 
   const loadMaps = () => {
@@ -35,9 +62,6 @@ export default function MapList({ visible, onClose, onEditMap, wsRef }: MapListP
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'load_map' }));
     }
-    // รอรับข้อมูลจาก WebSocket
-    // ในการใช้งานจริงจะมีการรับข้อมูลจาก onmessage
-    setLoading(false);
   };
 
   const getTileCount = (tiles: any[]) => {

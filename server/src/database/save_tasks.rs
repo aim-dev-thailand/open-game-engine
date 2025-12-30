@@ -81,11 +81,10 @@ async fn save_maps(pool: &PgPool, maps: &MapsMap) {
         let spawn_points_json =
             serde_json::to_string(&map.spawn_points).unwrap_or("[]".to_string());
         let npcs_json = serde_json::to_string(&map.npcs).unwrap_or("[]".to_string());
-        let monsters_json = serde_json::to_string(&map.monsters).unwrap_or("[]".to_string());
         let result = sqlx::query(
             r#"
-            INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -105,7 +104,6 @@ async fn save_maps(pool: &PgPool, maps: &MapsMap) {
         .bind(&tiles_json)
         .bind(&spawn_points_json)
         .bind(&npcs_json)
-        .bind(&monsters_json)
         .execute(pool)
         .await;
 

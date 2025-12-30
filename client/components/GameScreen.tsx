@@ -204,12 +204,16 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
     try {
       console.log('Loading sprite asset...', spriteId);
-      const asset = Asset.fromModule(spriteAssetSource);
-      await asset.downloadAsync();
-      console.log('Sprite asset downloaded:', asset.localUri);
+      const keys = Object.keys(CHARACTERS);
+      for (const item of keys) {
+        const asset = Asset.fromModule(spriteAssetSource);
+        await asset.downloadAsync();
+        console.log('Sprite asset downloaded:', asset.localUri);
+      }
 
+      const charAsset = Asset.fromModule(spriteAssetSource);
       const textureLoader = new TextureLoader();
-      const texture = textureLoader.load(asset);
+      const texture = textureLoader.load(charAsset);
       texture.magFilter = THREE.NearestFilter;
       texture.minFilter = THREE.NearestFilter;
 
@@ -228,7 +232,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       console.error('Error loading sprite:', e);
     }
 
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
     camera.lookAt(0, 0, 0);
 
