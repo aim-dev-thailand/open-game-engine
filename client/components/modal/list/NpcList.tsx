@@ -22,9 +22,9 @@ type NpcType = {
   map_id?: number;
   npc_type: 'monster' | 'shop' | 'quest';
   crit_rate: number;
-  dodge_value: number;
-  hit_value: number;
-  attack_first: boolean;
+  evasion: number;
+  accuracy: number;
+  is_attack_first: boolean;
 };
 
 type NpcListProps = {
@@ -85,7 +85,7 @@ export default function NpcList({ visible, onClose, onEditNpc, wsRef }: NpcListP
                         {npc.is_hostile && (
                           <Text style={styles.hostileBadge}>⚔️ ศัตรู</Text>
                         )}
-                        {npc.attack_first && (
+                        {npc.is_attack_first && (
                           <Text style={styles.hostileBadge}>⚡ โจมตีก่อน</Text>
                         )}
                         {npc.can_trade && (
@@ -106,8 +106,8 @@ export default function NpcList({ visible, onClose, onEditNpc, wsRef }: NpcListP
                       <Text style={styles.statText}>🛡️ ป้องกัน: {npc.defense}</Text>
                       <Text style={styles.statText}>🏃 ความเร็ว: {npc.move_speed}</Text>
                       <Text style={styles.statText}>💥 คริ: {npc.crit_rate * 100}%</Text>
-                      <Text style={styles.statText}>💨 หลบ: {npc.dodge_value}</Text>
-                      <Text style={styles.statText}>🎯 แม่น: {npc.hit_value}</Text>
+                      <Text style={styles.statText}>💨 หลบ: {npc.evasion}</Text>
+                      <Text style={styles.statText}>🎯 แม่น: {npc.accuracy}</Text>
                     </View>
                     <View style={styles.npcPosition}>
                       <Text style={styles.positionText}>

@@ -30,9 +30,9 @@ type NpcType = {
   map_id?: number;
   npc_type: 'monster' | 'shop' | 'quest';
   crit_rate: number;
-  dodge_value: number;
-  hit_value: number;
-  attack_first: boolean;
+  evasion: number;
+  accuracy: number;
+  is_attack_first: boolean;
 };
 
 type EditNpcModalProps = {
@@ -66,9 +66,9 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
     position: { x: 0, y: 0 },
     npc_type: 'monster',
     crit_rate: 0.05,
-    dodge_value: 0.0,
-    hit_value: 0.0,
-    attack_first: false,
+    evasion: 0.0,
+    accuracy: 0.0,
+    is_attack_first: false,
   });
 
   const [showSpritePicker, setShowSpritePicker] = useState(false);
@@ -96,9 +96,9 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
         position: { x: 0, y: 0 },
         npc_type: 'monster',
         crit_rate: 0.05,
-        dodge_value: 0.0,
-        hit_value: 0.0,
-        attack_first: false,
+        evasion: 0.0,
+        accuracy: 0.0,
+        is_attack_first: false,
       });
     }
   }, [npc, visible]);
@@ -400,8 +400,8 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
                 <Text style={styles.label}>ค่าการแม่นยำ</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.hit_value.toString()}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, hit_value: parseFloat(text) || 0.0 }))}
+                  value={formData.accuracy.toString()}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, accuracy: parseFloat(text) || 0.0 }))}
                   placeholder="0.0"
                   keyboardType="decimal-pad"
                 />
@@ -413,8 +413,8 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
                 <Text style={styles.label}>ค่าการหลบหลีก</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.dodge_value.toString()}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, dodge_value: parseFloat(text) || 0.0 }))}
+                  value={formData.evasion.toString()}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, evasion: parseFloat(text) || 0.0 }))}
                   placeholder="0.0"
                   keyboardType="decimal-pad"
                 />
@@ -447,16 +447,16 @@ export default function EditNpcModal({ visible, onClose, npc, onSave, mode }: Ed
               <Text style={styles.label}>โจมตีก่อน (Aggressive)</Text>
               <View style={styles.switchContainer}>
                 <TouchableOpacity
-                  style={[styles.switchButton, !formData.attack_first && styles.switchButtonActive]}
-                  onPress={() => setFormData(prev => ({ ...prev, attack_first: false }))}
+                  style={[styles.switchButton, !formData.is_attack_first && styles.switchButtonActive]}
+                  onPress={() => setFormData(prev => ({ ...prev, is_attack_first: false }))}
                 >
-                  <Text style={[styles.switchButtonText, !formData.attack_first && styles.switchButtonTextActive]}>ไม่</Text>
+                  <Text style={[styles.switchButtonText, !formData.is_attack_first && styles.switchButtonTextActive]}>ไม่</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.switchButton, formData.attack_first && styles.switchButtonActive]}
-                  onPress={() => setFormData(prev => ({ ...prev, attack_first: true }))}
+                  style={[styles.switchButton, formData.is_attack_first && styles.switchButtonActive]}
+                  onPress={() => setFormData(prev => ({ ...prev, is_attack_first: true }))}
                 >
-                  <Text style={[styles.switchButtonText, formData.attack_first && styles.switchButtonTextActive]}>ใช่</Text>
+                  <Text style={[styles.switchButtonText, formData.is_attack_first && styles.switchButtonTextActive]}>ใช่</Text>
                 </TouchableOpacity>
               </View>
             </View>

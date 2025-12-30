@@ -1,6 +1,7 @@
 use crate::logic::combat::handle_attack;
 use crate::models::*;
 use bcrypt::{DEFAULT_COST, hash, verify};
+use bigdecimal::{BigDecimal, FromPrimitive};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use sqlx::{PgPool, Row};
@@ -249,10 +250,7 @@ async fn handle_login(
     let username = data["username"].as_str().unwrap_or("");
     let password = data["password"].as_str().unwrap_or("");
 
-    println!(
-        "พยายามเข้าสู่ระบบ: username={} password={}",
-        username, password
-    );
+    println!("พยายามเข้าสู่ระบบ: username={}", username);
 
     // Server-side validation
     if username.trim().is_empty() {
@@ -367,8 +365,12 @@ async fn handle_login(
 
 async fn handle_move(player_id: &str, players: &PlayersMap, data: &serde_json::Value) {
     if let Some(mut p) = players.get_mut(player_id) {
-        p.x = data["x"].as_f64().unwrap() as f32;
-        p.y = data["y"].as_f64().unwrap() as f32;
+        if let Some(x) = data["x"].as_f64() {
+            p.x = BigDecimal::from_f64(x).unwrap_or_default();
+        }
+        if let Some(y) = data["y"].as_f64() {
+            p.y = BigDecimal::from_f64(y).unwrap_or_default();
+        }
     }
 }
 
@@ -523,7 +525,7 @@ async fn handle_save_npc(
                 INSERT INTO npcs (
                     id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed,
                     is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id,
-                    npc_type, crit_rate, dodge_value, hit_value, attack_first
+                    npc_type, crit_rate, evasion, accuracy, is_attack_first
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
                 ON CONFLICT (id) DO UPDATE SET
@@ -546,8 +548,8 @@ async fn handle_save_npc(
                     map_id = EXCLUDED.map_id,
                     npc_type = EXCLUDED.npc_type,
                     crit_rate = EXCLUDED.crit_rate,
-                    dodge_value = EXCLUDED.dodge_value,
-                    hit_value = EXCLUDED.hit_value,
+                    evasion = EXCLUDED.evasion,
+                    accuracy = EXCLUDED.accuracy,
                     attack_first = EXCLUDED.attack_first,
                     updated_at = NOW()
                 "#
@@ -561,7 +563,7 @@ async fn handle_save_npc(
             .bind(npc_to_save.max_hp)
             .bind(npc_to_save.attack)
             .bind(npc_to_save.defense)
-            .bind(npc_to_save.move_speed)
+            .bind(&npc_to_save.move_speed)
             .bind(npc_to_save.is_hostile)
             .bind(npc_to_save.can_trade)
             .bind(npc_to_save.can_quest)
@@ -571,16 +573,16 @@ async fn handle_save_npc(
             .bind(&position_json)
             .bind(npc_to_save.map_id)
             .bind(&npc_to_save.npc_type)
-            .bind(npc_to_save.crit_rate)
-            .bind(npc_to_save.dodge_value)
-            .bind(npc_to_save.hit_value)
-            .bind(npc_to_save.attack_first)
+            .bind(&npc_to_save.crit_rate)
+            .bind(&npc_to_save.evasion)
+            .bind(&npc_to_save.accuracy)
+            .bind(npc_to_save.is_attack_first)
             .execute(pool)
             .await;
 
             match result {
                 Ok(_) => {
-                    npcs.insert(id, npc_to_save);
+                    npcs.insert(id, npc_to_save.clone());
                     println!("บันทึก NPC: {}", npc_name);
 
                     let _ = ws
@@ -781,7 +783,7 @@ async fn handle_load_classes(
                         matk: row.get::<i32, _>("matk"),
                         mdef: row.get::<i32, _>("mdef"),
                         atkspd: row.get::<i32, _>("atkspd"),
-                        movespeed: row.get::<f64, _>("movespeed"),
+                        movespeed: row.get::<BigDecimal, _>("movespeed"),
                         evasion: row.get::<i32, _>("evasion"),
                         accuracy: row.get::<i32, _>("accuracy"),
                         crit_rate: row.get::<i32, _>("crit_rate"),
@@ -906,8 +908,8 @@ async fn handle_create_character(
     let new_player = PlayerState {
         id: character_id.clone(),
         username: character_name.to_string(),
-        x: 100.0,
-        y: 100.0,
+        x: BigDecimal::from(100),
+        y: BigDecimal::from(100),
         hp: class_data.hp,
         max_hp: class_data.hp,
         mp: 50,
@@ -916,10 +918,10 @@ async fn handle_create_character(
         // Base Stats จาก class
         base_atk: class_data.atk,
         base_def: class_data.def,
-        move_speed: class_data.movespeed,
-        accuracy: (class_data.accuracy as f32) / 100.0,
-        evasion: (class_data.evasion as f32) / 100.0,
-        crit_rate: (class_data.crit_rate as f32) / 100.0,
+        move_speed: class_data.movespeed.clone(),
+        accuracy: BigDecimal::from(class_data.accuracy) / BigDecimal::from(100),
+        evasion: BigDecimal::from(class_data.evasion) / BigDecimal::from(100),
+        crit_rate: BigDecimal::from(class_data.crit_rate) / BigDecimal::from(100),
 
         // Primary Stats จาก class
         strength: class_data.strength,
@@ -965,18 +967,18 @@ async fn handle_create_character(
     )
     .bind(&new_player.id)
     .bind(&new_player.username)
-    .bind(new_player.x)
-    .bind(new_player.y)
+    .bind(&new_player.x)
+    .bind(&new_player.y)
     .bind(new_player.hp)
     .bind(new_player.max_hp)
     .bind(new_player.mp)
     .bind(new_player.max_mp)
     .bind(new_player.base_atk)
     .bind(new_player.base_def)
-    .bind(new_player.move_speed)
-    .bind(new_player.accuracy)
-    .bind(new_player.evasion)
-    .bind(new_player.crit_rate)
+    .bind(&new_player.move_speed)
+    .bind(&new_player.accuracy)
+    .bind(&new_player.evasion)
+    .bind(&new_player.crit_rate)
     .bind(new_player.strength)
     .bind(new_player.dex)
     .bind(new_player.agi)
@@ -993,7 +995,7 @@ async fn handle_create_character(
 
     match insert_result {
         Ok(_) => {
-            players.insert(character_id.clone(), new_player);
+            players.insert(character_id.clone(), new_player.clone());
 
             println!(
                 "สร้างตัวละครใหม่: {} (อาชีพ: {}) สำหรับผู้เล่น: {}",
@@ -1038,18 +1040,36 @@ async fn handle_load_characters(
     // ในอนาคตควรกรองด้วย username หรือ user_id แต่ตอนนี้ดึงทั้งหมดตาม logic เดิม
 
     let characters_result = sqlx::query(
-        "SELECT id, username, level, hp, max_hp, str, dex, agi, vit, int, luk FROM players",
+        "SELECT id, username, level, hp, max_hp, str, dex, agi, vit, int, luk, current_exp, stat_points, skill_points, base_atk, base_def, accuracy, evasion, crit_rate, move_speed FROM players",
     )
     .fetch_all(pool)
     .await;
 
     match characters_result {
         Ok(rows) => {
+            let levels_result =
+                sqlx::query("SELECT level, exp_required FROM level_exp_table WHERE level = $1")
+                    .bind(rows[0].get::<i32, _>("level"))
+                    .fetch_all(pool)
+                    .await;
+
+            let exp_required: Vec<BigDecimal> = levels_result
+                .unwrap()
+                .iter()
+                .map(|row| row.get::<BigDecimal, _>("exp_required"))
+                .collect();
+
+            if exp_required.is_empty() {
+                eprintln!("ไม่พบข้อมูล level_exp_table");
+                return;
+            }
+
             let characters: Vec<serde_json::Value> = rows
                 .iter()
                 .map(|row| {
                     serde_json::json!({
                         "id": row.get::<String, _>("id"),
+                        "sprite_id": "1", // TODO: ดึงจากตาราง players หรือ classes
                         "character_name": row.get::<String, _>("username"),
                         "class_name": "นักพจญภัย", // TODO: จอยตาราง classes เพื่อดึงชื่ออาชีพ
                         "level": row.get::<i32, _>("level"),
@@ -1061,6 +1081,24 @@ async fn handle_load_characters(
                         "vit": row.get::<i32, _>("vit"),
                         "int": row.get::<i32, _>("int"),
                         "luk": row.get::<i32, _>("luk"),
+                        "exp": row.get::<i32, _>("current_exp"),
+                        "max_exp": exp_required.last().unwrap(),
+                        "atk": row.get::<i32, _>("base_atk"),
+                        "def": row.get::<i32, _>("base_def"),
+                        "accuracy": row.get::<BigDecimal, _>("accuracy"),
+                        "evasion": row.get::<BigDecimal, _>("evasion"),
+                        "crit_rate": row.get::<BigDecimal, _>("crit_rate"),
+                        "move_speed": row.get::<BigDecimal, _>("move_speed"),
+                        "skill_points": row.get::<i32, _>("skill_points"),
+                        "stats_points": row.get::<i32, _>("stat_points"),
+                        "equipment": {
+                            "head": null,
+                            "body": null,
+                            "legs": null,
+                            "feet": null,
+                            "weapon": null,
+                            "shield": null
+                        }
                     })
                 })
                 .collect();

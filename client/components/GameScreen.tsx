@@ -4,6 +4,7 @@ import { GLView } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
 import { WS_API } from '@/env';
 import { CHARACTERS } from '@/assets/characters';
+import { TILESETS } from '@/assets/tilesets';
 import { CharacterData } from '@/model/character';
 import * as THREE from 'three';
 import Joypad from './ui/Joypad';
@@ -84,9 +85,9 @@ type NpcType = {
   map_id?: number;
   npc_type: 'monster' | 'shop' | 'quest';
   crit_rate: number;
-  dodge_value: number;
-  hit_value: number;
-  attack_first: boolean;
+  evasion: number;
+  accuracy: number;
+  is_attack_first: boolean;
 };
 
 type SkillType = {
@@ -109,6 +110,7 @@ type SkillType = {
 export default function GameScreen({ username, character, onLogout, role = 'user' }: GameScreenProps) {
   const rendererRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
+  const mapMeshesRef = useRef<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const facingDir = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -139,7 +141,97 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   const [currentNpc, setCurrentNpc] = useState<NpcType | undefined>();
   const [currentSkill, setCurrentSkill] = useState<SkillType | undefined>();
 
+  const [mapData, setMapData] = useState<MapType | undefined>(undefined);
+
   const isAdmin = role === 'admin' || role === 'moderator';
+
+  useEffect(() => {
+    if (mapData && sceneRef.current) {
+      // Clear old map
+      mapMeshesRef.current.forEach(mesh => {
+        sceneRef.current.remove(mesh);
+        // Dispose geometry/material if possible to prevent leak
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) {
+          if (Array.isArray(mesh.material)) mesh.material.forEach((m: any) => m.dispose());
+          else mesh.material.dispose();
+        }
+      });
+      mapMeshesRef.current = [];
+
+      // Render new map
+      mapData.tiles.forEach(tile => {
+        if (tile.tileX !== undefined && tile.tileY !== undefined) {
+          const tilesetId = tile.tileset_id || 1;
+          const asset = TILESETS[tilesetId];
+          if (!asset) return;
+
+          const textureLoader = new TextureLoader();
+          textureLoader.load(asset, (texture: any) => {
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter; // Also set minFilter
+
+            // Calculate UVs
+            const tileWidth = 32;
+            const tileHeight = 32;
+            const imageWidth = texture.image.width;
+            const imageHeight = texture.image.height;
+
+            const cols = imageWidth / tileWidth;
+            const rows = imageHeight / tileHeight;
+
+            const x = tile.tileX || 0;
+            const y = tile.tileY || 0;
+
+            // UV coordinates (0,0 is bottom-left in Three.js)
+            // But usually image coordinates are (0,0) top-left.
+            // Three.js Texture has flipY = true by default? No, usually false for standard loaders but Expo TextureLoader might vary.
+            // Let's assume standard UV: (0,0) is bottom-left.
+            // We want (x, y) tile from Top-Left.
+            // uLeft = x / cols
+            // uRight = (x+1) / cols
+            // vTop = 1 - (y / rows)
+            // vBottom = 1 - ((y+1) / rows)
+
+            const uLeft = x / cols;
+            const uRight = (x + 1) / cols;
+            const vTop = 1 - (y / rows);
+            const vBottom = 1 - ((y + 1) / rows);
+
+            const geometry = new THREE.PlaneGeometry(1, 1);
+            const uvs = geometry.attributes.uv;
+
+            // UV mapping order: TL, TR, BL, BR for PlaneGeometry?
+            // PlaneGeometry(1, 1) default:
+            // 0: (-0.5, 0.5, 0) -> UV(0, 1) Top Left
+            // 1: ( 0.5, 0.5, 0) -> UV(1, 1) Top Right
+            // 2: (-0.5,-0.5, 0) -> UV(0, 0) Bottom Left
+            // 3: ( 0.5,-0.5, 0) -> UV(1, 0) Bottom Right
+
+            uvs.setXY(0, uLeft, vTop);     // TL
+            uvs.setXY(1, uRight, vTop);    // TR
+            uvs.setXY(2, uLeft, vBottom);  // BL
+            uvs.setXY(3, uRight, vBottom); // BR
+            uvs.needsUpdate = true;
+
+            const material = new THREE.MeshBasicMaterial({
+              map: texture,
+              transparent: true
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(tile.x, 0, tile.y);
+            mesh.rotation.x = -Math.PI / 2; // Flat on ground
+
+            if (sceneRef.current) {
+              sceneRef.current.add(mesh);
+              mapMeshesRef.current.push(mesh);
+            }
+          });
+        }
+      });
+    }
+  }, [mapData]);
 
   useEffect(() => {
     wsRef.current = new WebSocket(WS_API);
@@ -169,6 +261,9 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         console.log('NPC โหลดแล้ว:', data.npcs);
       } else if (data.type === 'maps_loaded') {
         console.log('แผนที่โหลดแล้ว:', data.maps);
+        if (data.maps && data.maps.length > 0) {
+          setMapData(data.maps[0]);
+        }
       }
     };
 
@@ -252,6 +347,11 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
     const playerMesh = new THREE.Mesh(geometry, material);
     playerMesh.position.y = 0.75;
+    // Rotate to face camera (Billboardish)
+    // Camera is at (0, 10, 10) looking at (0, 0, 0). Angle is 45 deg down.
+    // So sprite plane (default vertical) needs to tilt back 45 deg?
+    // Actually, simply:
+    playerMesh.rotation.x = -Math.PI / 4; // 45 degrees back
     scene.add(playerMesh);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);

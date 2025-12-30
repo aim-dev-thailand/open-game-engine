@@ -137,7 +137,7 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         let position_json = serde_json::to_string(&npc.position).unwrap_or("{}".to_string());
         let result = sqlx::query(
             r#"
-            INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id, npc_type, crit_rate, dodge_value, hit_value, attack_first)
+            INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id, npc_type, crit_rate, evasion, accuracy, is_attack_first)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -159,9 +159,9 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
                 map_id = EXCLUDED.map_id,
                 npc_type = EXCLUDED.npc_type,
                 crit_rate = EXCLUDED.crit_rate,
-                dodge_value = EXCLUDED.dodge_value,
-                hit_value = EXCLUDED.hit_value,
-                attack_first = EXCLUDED.attack_first
+                evasion = EXCLUDED.evasion,
+                accuracy = EXCLUDED.accuracy,
+                is_attack_first = EXCLUDED.is_attack_first
             "#,
         )
         .bind(id)
@@ -173,7 +173,7 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         .bind(npc.max_hp)
         .bind(npc.attack)
         .bind(npc.defense)
-        .bind(npc.move_speed)
+        .bind(&npc.move_speed)
         .bind(npc.is_hostile)
         .bind(npc.can_trade)
         .bind(npc.can_quest)
@@ -183,10 +183,10 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         .bind(&position_json)
         .bind(npc.map_id)
         .bind(&npc.npc_type)
-        .bind(npc.crit_rate)
-        .bind(npc.dodge_value)
-        .bind(npc.hit_value)
-        .bind(npc.attack_first)
+        .bind(&npc.crit_rate)
+        .bind(&npc.evasion)
+        .bind(&npc.accuracy)
+        .bind(npc.is_attack_first)
         .execute(pool)
         .await;
 
@@ -234,9 +234,9 @@ async fn save_skills(pool: &PgPool, skills: &SkillsMap) {
         .bind(skill.level_required)
         .bind(skill.mp_cost)
         .bind(skill.cooldown)
-        .bind(skill.cast_time)
-        .bind(skill.range)
-        .bind(skill.area_of_effect)
+        .bind(&skill.cast_time)
+        .bind(&skill.range)
+        .bind(&skill.area_of_effect)
         .bind(&effects_json)
         .bind(&learnable_by_json)
         .execute(pool)

@@ -1,12 +1,14 @@
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub id: String,
     pub username: String,
-    pub x: f32,
-    pub y: f32,
+    pub x: BigDecimal,
+    pub y: BigDecimal,
     pub hp: i32,
     pub max_hp: i32,
     pub mp: i32,
@@ -15,10 +17,10 @@ pub struct PlayerState {
     // Base Stats
     pub base_atk: i32,
     pub base_def: i32,
-    pub move_speed: f64,
-    pub accuracy: f32,
-    pub evasion: f32,
-    pub crit_rate: f32,
+    pub move_speed: BigDecimal,
+    pub accuracy: BigDecimal,
+    pub evasion: BigDecimal,
+    pub crit_rate: BigDecimal,
 
     // Primary Stats (สถานะหลัก)
     #[serde(rename = "str")]
@@ -64,30 +66,42 @@ impl PlayerState {
         self.max_mp + (self.intelligence * 5)
     }
 
-    pub fn calculate_accuracy(&self) -> f32 {
+    pub fn calculate_accuracy(&self) -> BigDecimal {
         // Accuracy = base_accuracy + (DEX * 0.002)
-        self.accuracy + (self.dex as f32 * 0.002)
+        // Note: 0.002 might be too small for BigDecimal visual if not scaled properly, but we'll stick to logic.
+        // Or if DEX * 0.002 is meant to be a Flat or Percent value.
+        // Assuming base_accuracy is around 20 (from schema default).
+        let dex_bonus =
+            BigDecimal::from_i32(self.dex).unwrap() * BigDecimal::from_f32(0.002).unwrap();
+        &self.accuracy + dex_bonus
     }
 
-    pub fn calculate_evasion(&self) -> f32 {
+    pub fn calculate_evasion(&self) -> BigDecimal {
         // Evasion = base_evasion + (AGI * 0.003)
-        self.evasion + (self.agi as f32 * 0.003)
+        let agi_bonus =
+            BigDecimal::from_i32(self.agi).unwrap() * BigDecimal::from_f32(0.003).unwrap();
+        &self.evasion + agi_bonus
     }
 
-    pub fn calculate_crit_rate(&self) -> f32 {
+    pub fn calculate_crit_rate(&self) -> BigDecimal {
         // Crit Rate = base_crit_rate + (LUK * 0.001)
-        self.crit_rate + (self.luk as f32 * 0.001)
+        let luk_bonus =
+            BigDecimal::from_i32(self.luk).unwrap() * BigDecimal::from_f32(0.001).unwrap();
+        &self.crit_rate + luk_bonus
     }
 
-    pub fn calculate_move_speed(&self) -> f64 {
+    pub fn calculate_move_speed(&self) -> BigDecimal {
         // Move Speed = base_move_speed + (AGI * 0.01)
-        self.move_speed + (self.agi as f64 * 0.01)
+        let agi_bonus =
+            BigDecimal::from_i32(self.agi).unwrap() * BigDecimal::from_f32(0.01).unwrap();
+        &self.move_speed + agi_bonus
     }
 
     /// คำนวณ EXP ที่ต้องการเพื่อเลเวลอัพ
     pub fn exp_to_next_level(&self) -> i32 {
         // สูตร: EXP = 100 * level^1.5
-        (100.0 * (self.level as f32).powf(1.5)) as i32
+        // Using f64 for power calculation then converting to i32 as the result is an integer
+        (100.0 * (self.level as f64).powf(1.5)) as i32
     }
 
     /// ตรวจสอบว่าได้ EXP พอเลเวลอัพหรือไม่

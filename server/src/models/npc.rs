@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,7 +12,7 @@ pub struct NpcData {
     pub max_hp: i32,
     pub attack: i32,
     pub defense: i32,
-    pub move_speed: f32,
+    pub move_speed: BigDecimal,
     pub is_hostile: bool,
     pub can_trade: bool,
     pub can_quest: bool,
@@ -23,13 +24,13 @@ pub struct NpcData {
     #[serde(default = "default_npc_type")]
     pub npc_type: String,
     #[serde(default)]
-    pub crit_rate: f32,
+    pub crit_rate: BigDecimal,
     #[serde(default)]
-    pub dodge_value: f32,
+    pub evasion: BigDecimal,
     #[serde(default)]
-    pub hit_value: f32,
+    pub accuracy: BigDecimal,
     #[serde(default)]
-    pub attack_first: bool,
+    pub is_attack_first: bool,
 }
 
 fn default_npc_type() -> String {

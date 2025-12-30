@@ -15,16 +15,67 @@ CREATE TABLE users (
 -- Index สำหรับการค้นหา
 CREATE INDEX idx_users_username ON users(username);
 
+-- ตารางเควส (ย้ายมาก่อน classes เพราะ classes อ้างอิงถึง quests)
+CREATE TABLE quests (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    type VARCHAR(20) DEFAULT 'class_change', -- 'class_change', 'main', 'side', 'daily'
+    min_level INT DEFAULT 1,
+    required_classes JSONB DEFAULT '[]'::jsonb, -- อาชีพที่ต้องการก่อนทำเควส
+    rewards JSONB DEFAULT '{}'::jsonb, -- รางวัล (items, exp, gold, etc.)
+    objectives JSONB DEFAULT '[]'::jsonb, -- เป้าหมายของเควส
+    is_repeatable BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ตารางอาชีพ (Classes)
+CREATE TABLE classes (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    sprite_id VARCHAR(5) NOT NULL,
+    
+    -- เงื่อนไขการเปลี่ยนอาชีพ
+    min_level INT DEFAULT 1,
+    quest_id INT REFERENCES quests(id), -- เควสที่ต้องทำเพื่อเปลี่ยนอาชีพ
+    
+    -- Base Stats ของอาชีพ
+    str INT DEFAULT 5,  -- Strength
+    dex INT DEFAULT 5,  -- Dexterity
+    agi INT DEFAULT 5,  -- Agility
+    vit INT DEFAULT 5,  -- Vitality
+    int INT DEFAULT 5,  -- Intelligence
+    luk INT DEFAULT 5,  -- Luck
+    
+    -- สถานะการต่อสู้ของอาชีพ
+    hp INT DEFAULT 100,       -- พลังชีวิต
+    atk INT DEFAULT 10,       -- พลังโจมตี
+    def INT DEFAULT 5,        -- พลังป้องกัน
+    matk INT DEFAULT 5,       -- พลังโจมตีเวทย์
+    mdef INT DEFAULT 5,       -- พลังป้องกันเวทย์
+    atkspd INT DEFAULT 5,        -- ความเร็ว (Attack Speed / Turn Speed)
+    movespeed NUMERIC(4, 2) DEFAULT 2.0, -- ความเร็วในการเคลื่อนที่
+    evasion INT DEFAULT 10,   -- การหลบหลีก (%)
+    accuracy INT DEFAULT 100, -- ความแม่นยำ (%)
+    crit_rate INT DEFAULT 2,  -- อัตราคริติคอล (%)
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- ตารางผู้เล่น (ข้อมูลในเกม)
 CREATE TABLE players (
     id VARCHAR(64) PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     username VARCHAR(50) UNIQUE NOT NULL,
     role user_role DEFAULT 'user',
+    classes_id INT REFERENCES classes(id), -- ย้ายมาไว้ที่นี่เลย
 
     -- Character Stats
-    x FLOAT DEFAULT 0,
-    y FLOAT DEFAULT 0,
+    x NUMERIC(8, 2) DEFAULT 0,
+    y NUMERIC(8, 2) DEFAULT 0,
     hp INT DEFAULT 100,
     max_hp INT DEFAULT 100,
     mp INT DEFAULT 50,
@@ -33,10 +84,10 @@ CREATE TABLE players (
     -- Base Stats
     base_atk INT DEFAULT 20,
     base_def INT DEFAULT 10,
-    accuracy FLOAT DEFAULT 0.9,
-    evasion FLOAT DEFAULT 0.1,
-    crit_rate FLOAT DEFAULT 0.05,
-    move_speed FLOAT DEFAULT 2.0,
+    accuracy NUMERIC(5, 2) DEFAULT 20,
+    evasion NUMERIC(5, 2) DEFAULT 0,
+    crit_rate NUMERIC(4, 2) DEFAULT 0.05,
+    move_speed NUMERIC(4, 2) DEFAULT 2.0,
 
     -- Primary Stats (สถานะหลัก)
     str INT DEFAULT 5,  -- Strength - เพิ่มพลังโจมตีกายภาพ
@@ -55,67 +106,12 @@ CREATE TABLE players (
     last_updated TIMESTAMP DEFAULT NOW()
 );
 
--- ตารางอาชีพ (Classes)
-CREATE TABLE classes (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
-    description TEXT,
-    sprite_id VARCHAR(5) NOT NULL,
-    
-    -- เงื่อนไขการเปลี่ยนอาชีพ
-    min_level INT DEFAULT 1,
-    quest_id INT, -- เควสที่ต้องทำเพื่อเปลี่ยนอาชีพ (foreign key จะถูกเพิ่มหลังจากสร้างตาราง quests)
-    
-    -- Base Stats ของอาชีพ
-    str INT DEFAULT 5,  -- Strength
-    dex INT DEFAULT 5,  -- Dexterity
-    agi INT DEFAULT 5,  -- Agility
-    vit INT DEFAULT 5,  -- Vitality
-    int INT DEFAULT 5,  -- Intelligence
-    luk INT DEFAULT 5,  -- Luck
-    
-    -- สถานะการต่อสู้ของอาชีพ
-    hp INT DEFAULT 100,       -- พลังชีวิต
-    atk INT DEFAULT 10,       -- พลังโจมตี
-    def INT DEFAULT 5,        -- พลังป้องกัน
-    matk INT DEFAULT 5,       -- พลังโจมตีเวทย์
-    mdef INT DEFAULT 5,       -- พลังป้องกันเวทย์
-    atkspd INT DEFAULT 5,        -- ความเร็ว (Attack Speed / Turn Speed)
-    movespeed FLOAT DEFAULT 2.0, -- ความเร็วในการเคลื่อนที่
-    evasion INT DEFAULT 10,   -- การหลบหลีก (%)
-    accuracy INT DEFAULT 100, -- ความแม่นยำ (%)
-    crit_rate INT DEFAULT 2,  -- อัตราคริติคอล (%)
-    
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- เพิ่มคอลัมน์ classes_id ในตาราง players
-ALTER TABLE players ADD COLUMN classes_id INT REFERENCES classes(id);
-
--- ตารางเควส (สำหรับเงื่อนไขการเปลี่ยนอาชีพ)
-CREATE TABLE quests (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    type VARCHAR(20) DEFAULT 'class_change', -- 'class_change', 'main', 'side', 'daily'
-    min_level INT DEFAULT 1,
-    required_classes JSONB DEFAULT '[]'::jsonb, -- อาชีพที่ต้องการก่อนทำเควส
-    rewards JSONB DEFAULT '{}'::jsonb, -- รางวัล (items, exp, gold, etc.)
-    objectives JSONB DEFAULT '[]'::jsonb, -- เป้าหมายของเควส
-    is_repeatable BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- เพิ่ม foreign key constraint จาก classes ไปยัง quests
-ALTER TABLE classes ADD CONSTRAINT fk_classes_quest_id FOREIGN KEY (quest_id) REFERENCES quests(id);
-
 -- เพิ่มข้อมูลอาชีพพื้นฐาน "นักพจญภัย"
-INSERT INTO classes (name, description, min_level, str, dex, agi, vit, int, luk, hp, atk, def, matk, mdef, atkspd, evasion, accuracy, crit_rate)
+INSERT INTO classes (name, description, sprite_id, min_level, str, dex, agi, vit, int, luk, hp, atk, def, matk, mdef, atkspd, evasion, accuracy, crit_rate)
 VALUES (
     'นักพจญภัย',
     'อาชีพพื้นฐานสำหรับผู้เริ่มต้นผจญภัย',
+    '1', -- เพิ่ม sprite_id
     1,
     5,  -- str
     5,  -- dex
@@ -126,9 +122,9 @@ VALUES (
     100, -- hp
     10,  -- atk
     5,   -- def
-    5,   -- magic_atk
-    5,   -- magic_def
-    5,   -- atk_speed
+    5,   -- matk
+    5,   -- mdef
+    5,   -- atkspd
     10,  -- evasion (%)
     100, -- accuracy (%)
     2    -- crit_rate (%)
@@ -145,9 +141,9 @@ CREATE TABLE skills (
     level_required INT DEFAULT 1,
     mp_cost INT DEFAULT 0,
     cooldown INT DEFAULT 0,
-    cast_time FLOAT DEFAULT 0,
-    range FLOAT DEFAULT 1.0,
-    area_of_effect FLOAT DEFAULT 0,
+    cast_time NUMERIC(6, 2) DEFAULT 0,
+    range NUMERIC(6, 2) DEFAULT 1.0,
+    area_of_effect NUMERIC(6, 2) DEFAULT 0,
     effects JSONB DEFAULT '[]'::jsonb,
     learnable_by JSONB DEFAULT '["warrior","mage","archer"]'::jsonb
 );
@@ -158,32 +154,6 @@ CREATE TABLE player_skills (
     skill_id INT REFERENCES skills(id),
     skill_level INT DEFAULT 1,
     PRIMARY KEY (player_id, skill_id)
-);
-
--- ตารางมอนสเตอร์ (Template)
-CREATE TABLE monster_templates (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    sprite_id VARCHAR(100),
-    base_hp INT,
-    base_atk INT,
-    move_speed FLOAT,
-    accuracy FLOAT,
-    evasion FLOAT,
-    crit_rate FLOAT
-);
-
--- ตารางจุดเกิดมอนสเตอร์
-CREATE TABLE map_spawns (
-    id SERIAL PRIMARY KEY,
-    map_id INT NOT NULL,
-    monster_template_id INT REFERENCES monster_templates(id),
-    spawn_type VARCHAR(20), -- 'fixed' or 'random'
-    pos_x FLOAT,
-    pos_y FLOAT,
-    radius FLOAT DEFAULT 0,
-    max_count INT DEFAULT 5,
-    respawn_time_sec INT DEFAULT 10
 );
 
 -- ตารางไอเทม
@@ -232,7 +202,6 @@ CREATE TABLE maps (
     tiles JSONB DEFAULT '[]'::jsonb, -- เก็บข้อมูล tile layers
     spawn_points JSONB DEFAULT '[]'::jsonb, -- จุด spawn ของผู้เล่น
     npcs JSONB DEFAULT '[]'::jsonb, -- ตำแหน่ง NPC ในแผนที่
-    monsters JSONB DEFAULT '[]'::jsonb, -- ตำแหน่ง monster spawn
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -252,42 +221,31 @@ CREATE TABLE tilesets (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- ตาราง Map-Tileset Relationship (แผนที่หนึ่งใช้ได้หลาย tileset)
-CREATE TABLE map_tilesets (
-    id SERIAL PRIMARY KEY,
-    map_id INT REFERENCES maps(id) ON DELETE CASCADE,
-    tileset_id INT REFERENCES tilesets(id) ON DELETE CASCADE,
-    first_gid INT NOT NULL, -- Global ID แรกของ tileset นี้ในแผนที่
-    UNIQUE(map_id, tileset_id)
-);
-
 -- ตาราง NPC
 CREATE TABLE npcs (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    sprite_id VARCHAR(100),
+    sprite_id VARCHAR(5),
     level INT DEFAULT 1,
     hp INT DEFAULT 100,
     max_hp INT DEFAULT 100,
     attack INT DEFAULT 10,
     defense INT DEFAULT 5,
-    move_speed FLOAT DEFAULT 1.0,
+    move_speed NUMERIC(4, 2) DEFAULT 1.0,
     is_hostile BOOLEAN DEFAULT FALSE,
     can_trade BOOLEAN DEFAULT FALSE,
     can_quest BOOLEAN DEFAULT FALSE,
     dialogue JSONB DEFAULT '[]'::jsonb, -- บทสนทนา
     shop_items JSONB DEFAULT '[]'::jsonb, -- สินค้าที่ขาย (array of item_id)
     quests JSONB DEFAULT '[]'::jsonb, -- เควสที่ให้ (array of quest_id)
-    position JSONB DEFAULT '{}'::jsonb, -- ตำแหน่งเริ่มต้น {x, y}
-    map_id INT REFERENCES maps(id), -- แผนที่ที่อยู่
     
     -- เพิ่มเติม
     npc_type VARCHAR(20) DEFAULT 'monster', -- 'monster', 'shop', 'quest'
-    crit_rate FLOAT DEFAULT 0.05,
-    dodge_value FLOAT DEFAULT 0.0,
-    hit_value FLOAT DEFAULT 0.0,
-    attack_first BOOLEAN DEFAULT FALSE,
+    crit_rate NUMERIC(4, 2) DEFAULT 0.05,
+    evasion NUMERIC(5, 2) DEFAULT 0.0,
+    accuracy NUMERIC(5, 2) DEFAULT 0.0,
+    is_attack_first BOOLEAN DEFAULT FALSE,
 
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -296,8 +254,8 @@ CREATE TABLE npcs (
 -- ตารางประสบการณ์ต่อเลเวล (EXP Table)
 CREATE TABLE level_exp_table (
     level INT PRIMARY KEY,
-    exp_required INT NOT NULL,  -- EXP ที่ต้องการเพื่อขึ้นเลเวลนี้
-    exp_cumulative INT NOT NULL,  -- EXP สะสมรวมจาก level 1
+    exp_required NUMERIC(12, 0) NOT NULL,  -- EXP ที่ต้องการเพื่อขึ้นเลเวลนี้
+    exp_cumulative NUMERIC(12, 0) NOT NULL,  -- EXP สะสมรวมจาก level 1
     stat_points_reward INT DEFAULT 5,  -- Stat points ที่ได้รับเมื่อขึ้นเลเวล
     skill_points_reward INT DEFAULT 1,  -- Skill points ที่ได้รับเมื่อขึ้นเลเวล
     created_at TIMESTAMP DEFAULT NOW()
@@ -320,9 +278,9 @@ CREATE TABLE exp_formula (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    base_exp INT DEFAULT 100,  -- ค่าพื้นฐาน
-    exponent FLOAT DEFAULT 1.5,  -- เลขยกกำลัง
-    multiplier FLOAT DEFAULT 1.0,  -- ตัวคูณ
+    base_exp NUMERIC(12, 0) DEFAULT 100,  -- ค่าพื้นฐาน
+    exponent NUMERIC(8, 2) DEFAULT 1.5,  -- เลขยกกำลัง
+    multiplier NUMERIC(8, 2) DEFAULT 1.0,  -- ตัวคูณ
     is_active BOOLEAN DEFAULT TRUE,  -- สูตรที่ใช้งานอยู่
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -354,8 +312,6 @@ CREATE TABLE player_level_history (
 -- Index สำหรับ performance
 CREATE INDEX idx_maps_name ON maps(name);
 CREATE INDEX idx_tilesets_name ON tilesets(name);
-CREATE INDEX idx_npcs_map_id ON npcs(map_id);
-CREATE INDEX idx_map_spawns_map_id ON map_spawns(map_id);
 CREATE INDEX idx_level_exp_table_level ON level_exp_table(level);
 CREATE INDEX idx_player_level_history_player_id ON player_level_history(player_id);
 CREATE INDEX idx_exp_formula_active ON exp_formula(is_active);

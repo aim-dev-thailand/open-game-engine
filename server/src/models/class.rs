@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,10 +26,10 @@ pub struct ClassData {
     pub hp: i32,
     pub atk: i32,
     pub def: i32,
-    pub matk: i32,      // Renamed from magic_atk
-    pub mdef: i32,      // Renamed from magic_def
-    pub atkspd: i32,    // New field
-    pub movespeed: f64, // New field, float
+    pub matk: i32,             // Renamed from magic_atk
+    pub mdef: i32,             // Renamed from magic_def
+    pub atkspd: i32,           // New field
+    pub movespeed: BigDecimal, // New field, float
     pub evasion: i32,
     pub accuracy: i32,
     pub crit_rate: i32,

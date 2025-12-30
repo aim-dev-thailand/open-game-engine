@@ -101,7 +101,7 @@ export default function CharacterList({ username, onSelectCharacter, onCreateNew
                                                 <View style={{ width: '20%', alignItems: 'center' }}>
                                                     <View style={{ width: 64, height: 100, overflow: 'hidden', borderColor: 'black', borderWidth: 1 }}>
                                                         <Image
-                                                            source={CHARACTERS[character?.sprite_id ? Number(character?.sprite_id) : 1] || CHARACTERS[1]}
+                                                            source={CHARACTERS[character?.sprite_id ? Number(character?.sprite_id) : 2] || CHARACTERS[1]}
                                                             resizeMode="stretch"
                                                             style={{ width: '400%', height: '400%' }}
                                                         />

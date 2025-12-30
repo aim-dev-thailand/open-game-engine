@@ -1,6 +1,8 @@
-use crate::models::{PlayerState, MonsterInstance};
+use crate::models::{MonsterInstance, PlayerState};
 use dashmap::DashMap;
 use std::sync::Arc;
+
+use bigdecimal::ToPrimitive;
 
 pub type PlayersMap = Arc<DashMap<String, PlayerState>>;
 pub type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
@@ -12,7 +14,7 @@ pub fn handle_attack(player_id: &str, players: &PlayersMap, monsters: &MonstersM
         if let Some(monster_ref) = monsters.iter().next() {
             let monster = monster_ref.value();
             // คำนวณดเมจ
-            let is_crit = rand::random::<f32>() < attacker.crit_rate;
+            let is_crit = rand::random::<f32>() < attacker.crit_rate.to_f32().unwrap_or(0.0);
             let mut dmg = attacker.base_atk;
             if is_crit {
                 dmg = (dmg as f32 * 1.5) as i32;
