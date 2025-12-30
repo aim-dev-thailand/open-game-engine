@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
+import { Asset } from 'expo-asset';
 import { WS_API } from '@/env';
 import { CHARACTERS } from '@/assets/characters';
 import { TILESETS } from '@/assets/tilesets';
@@ -182,6 +183,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const onContextCreate = async (gl: any) => {
+    console.log('onContextCreate: started');
     const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
     const renderer = new Renderer({ gl });
     renderer.setSize(width, height);
@@ -195,27 +197,36 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     scene.add(grid);
 
     const spriteId = character.sprite_id ? Number(character.sprite_id) : 1;
-    const spriteAsset = CHARACTERS[spriteId] || CHARACTERS[1];
+    const spriteAssetSource = CHARACTERS[spriteId] || CHARACTERS[1];
 
-    const textureLoader = new TextureLoader();
-    const texture = textureLoader.load(spriteAsset);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
+    // Define geometry outside so render loop handles it (UV updates)
+    const geometry = new THREE.PlaneGeometry(1, 1);
 
-    // Sprite is 4x4
-    const geometry = new THREE.PlaneGeometry(1, 1); // Aspect ratio? Char is usually taller. Let's stick to 1x1 or adjust if needed. User pic looks like 1:1 or close.
+    try {
+      console.log('Loading sprite asset...', spriteId);
+      const asset = Asset.fromModule(spriteAssetSource);
+      await asset.downloadAsync();
+      console.log('Sprite asset downloaded:', asset.localUri);
 
-    const material = new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      side: THREE.DoubleSide
-    });
+      const textureLoader = new TextureLoader();
+      const texture = textureLoader.load(asset);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
 
-    const playerMesh = new THREE.Mesh(geometry, material);
-    playerMesh.position.y = 0.5; // Half of height 1
-    // Billboard effect
-    playerMesh.rotation.x = -Math.PI / 4;
-    scene.add(playerMesh);
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide
+      });
+
+      const playerMesh = new THREE.Mesh(geometry, material);
+      playerMesh.position.y = 0.5;
+      playerMesh.rotation.x = -Math.PI / 4;
+      scene.add(playerMesh);
+      console.log('Player mesh added to scene');
+    } catch (e) {
+      console.error('Error loading sprite:', e);
+    }
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
@@ -425,7 +436,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       ))}
 
       <View style={styles.leftControls}>
-        <Joypad onMove={(x: number, y: number) => { facingDir.current = { x, y }; }} onStop={() => { }} />
+        <Joypad
+          onMove={(x: number, y: number) => { facingDir.current = { x, y }; }}
+          onStop={() => { facingDir.current = { x: 0, y: 0 }; }}
+        />
       </View>
 
       <ActionPad onAttack={handleAttack} />
