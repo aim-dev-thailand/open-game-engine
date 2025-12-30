@@ -46,6 +46,12 @@ export default function App() {
         username={username}
         onCharacterCreated={() => setPage("characterList")}
         onBackToCharacterList={() => setPage("characterList")}
+        onLogout={() => {
+          setPage("login");
+          setUsername("");
+          setRole("user");
+          setSelectedCharacter(null);
+        }}
       />
     );
   }

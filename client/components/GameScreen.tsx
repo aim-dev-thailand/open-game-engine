@@ -171,6 +171,14 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         console.log('แผนที่โหลดแล้ว:', data.maps);
       }
     };
+
+    wsRef.current.onclose = () => {
+      onLogout();
+    };
+
+    wsRef.current.onerror = () => {
+      onLogout();
+    };
   }, [username]);
 
   const addDamage = (x: number, y: number, dmg: number, isCrit: boolean) => {

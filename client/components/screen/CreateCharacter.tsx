@@ -8,6 +8,7 @@ interface CreateCharacterProps {
     username: string;
     onCharacterCreated: () => void;
     onBackToCharacterList: () => void;
+    onLogout: () => void;
 }
 
 interface ClassData {
@@ -28,7 +29,7 @@ interface ClassData {
     mdef: number;
 }
 
-export default function CreateCharacter({ username, onCharacterCreated, onBackToCharacterList }: CreateCharacterProps) {
+export default function CreateCharacter({ username, onCharacterCreated, onBackToCharacterList, onLogout }: CreateCharacterProps) {
     const [characterName, setCharacterName] = useState("");
     const [selectedClass, setSelectedClass] = useState<ClassData | null>(null);
     const [classes, setClasses] = useState<ClassData[]>([]);
@@ -73,10 +74,15 @@ export default function CreateCharacter({ username, onCharacterCreated, onBackTo
             }
         };
 
+        wsRef.current.onclose = () => {
+            onLogout();
+        };
+
         wsRef.current.onerror = () => {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             setIsLoading(false);
             setIsCreating(false);
+            onLogout();
         };
 
         return () => {
