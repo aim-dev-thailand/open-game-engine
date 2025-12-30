@@ -42,7 +42,7 @@ pub async fn handle_client(
                         }
                         Some("move") => {
                             player_id = data["player_id"].as_str().unwrap_or("").to_string();
-                            handle_move(&player_id, &players, &data).await;
+                            handle_move(&mut ws, &player_id, &players, &data).await;
                         }
                         Some("attack") => {
                             player_id = data["player_id"].as_str().unwrap_or("").to_string();
@@ -92,6 +92,9 @@ pub async fn handle_client(
                         }
                         Some("load_characters") => {
                             handle_load_characters(&mut ws, &pool, &data).await;
+                        }
+                        Some("select_character") => {
+                            handle_select_character(&mut ws, &pool, &players, &classes, &data).await;
                         }
                         Some("logout") => {
                             players.remove(&player_id);
@@ -445,11 +448,18 @@ async fn handle_login(
     }
 }
 
-async fn handle_move(player_id: &str, players: &PlayersMap, data: &serde_json::Value) {
+async fn handle_move(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    player_id: &str,
+    players: &PlayersMap,
+    data: &serde_json::Value,
+) {
+    println!("handle_move called for player_id: {}", player_id);
     if let Some(mut p) = players.get_mut(player_id) {
         let dx = data["x"].as_f64().unwrap_or(0.0);
         let dy = data["y"].as_f64().unwrap_or(0.0);
         let speed = p.move_speed.clone();
+        println!("Player found! Moving dx={}, dy={}, speed={}", dx, dy, speed);
 
         if dx != 0.0 || dy != 0.0 {
             // Calculate new position: current + (direction * speed)
@@ -473,8 +483,23 @@ async fn handle_move(player_id: &str, players: &PlayersMap, data: &serde_json::V
             p.x += move_x;
             p.y += move_y;
 
-            // println!("Move: {}, {} -> {}, {}", dx, dy, p.x, p.y);
+            // Send position update back to client
+            let x_f64 = p.x.to_string().parse::<f64>().unwrap_or(0.0);
+            let y_f64 = p.y.to_string().parse::<f64>().unwrap_or(0.0);
+
+            let response = serde_json::json!({
+                "type": "position_update",
+                "x": x_f64,
+                "y": y_f64
+            });
+
+            println!("Sending position_update: x={}, y={}", x_f64, y_f64);
+            let _ = ws
+                .send(Message::Text(response.to_string().into()))
+                .await;
         }
+    } else {
+        println!("Player not found in PlayersMap! player_id: {}", player_id);
     }
 }
 
@@ -1292,6 +1317,110 @@ async fn handle_load_characters(
                     .into(),
                 ))
                 .await;
+        }
+    }
+}
+
+async fn handle_select_character(
+    ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    pool: &PgPool,
+    players: &PlayersMap,
+    classes: &ClassesMap,
+    data: &serde_json::Value,
+) {
+    let character_id = data["character_id"].as_str().unwrap_or("");
+
+    println!("Selecting character: {}", character_id);
+
+    // Load character from database
+    let character_result = sqlx::query(
+        "SELECT id, user_id, classes_id, username, level, hp, max_hp, str, dex, agi, vit, int, luk, current_exp, stat_points, skill_points, base_atk, base_def, accuracy, evasion, crit_rate, move_speed FROM players WHERE id = $1"
+    )
+    .bind(character_id)
+    .fetch_optional(pool)
+    .await;
+
+    match character_result {
+        Ok(Some(row)) => {
+            // Handle nullable classes_id
+            let classes_id_opt = row.try_get::<i32, _>("classes_id").ok();
+
+            // For now, allow characters without a class (will use default stats)
+            // In the future, you can require class selection before entering game
+            if let Some(classes_id) = classes_id_opt {
+                let class_data = classes.get(&classes_id);
+                if class_data.is_none() {
+                    println!("Warning: Character has invalid classes_id: {}", classes_id);
+                }
+            } else {
+                println!("Warning: Character has no class assigned, using default stats");
+            }
+
+            // Create PlayerState
+            let character_id_string = row.get::<String, _>("id");
+            let player_state = PlayerState {
+                id: character_id_string.clone(),
+                user_id: row.get::<i32, _>("user_id"),
+                username: row.get::<String, _>("username"),
+                x: BigDecimal::from(0),
+                y: BigDecimal::from(0),
+                hp: row.get::<i32, _>("hp"),
+                max_hp: row.get::<i32, _>("max_hp"),
+                mp: 100,
+                max_mp: 100,
+                base_atk: row.get::<i32, _>("base_atk"),
+                base_def: row.get::<i32, _>("base_def"),
+                move_speed: row.get::<BigDecimal, _>("move_speed"),
+                accuracy: row.get::<BigDecimal, _>("accuracy"),
+                evasion: row.get::<BigDecimal, _>("evasion"),
+                crit_rate: row.get::<BigDecimal, _>("crit_rate"),
+                strength: row.get::<i32, _>("str"),
+                dex: row.get::<i32, _>("dex"),
+                agi: row.get::<i32, _>("agi"),
+                intelligence: row.get::<i32, _>("int"),
+                luk: row.get::<i32, _>("luk"),
+                vit: row.get::<i32, _>("vit"),
+                level: row.get::<i32, _>("level"),
+                current_exp: row.get::<i32, _>("current_exp"),
+                stat_points: row.get::<i32, _>("stat_points"),
+                skill_points: row.get::<i32, _>("skill_points"),
+                role: "user".to_string(),
+                learned_skills: vec![],
+                active_statuses: vec![],
+                equipment: EquipmentState {
+                    main_hand: None,
+                    off_hand: None,
+                },
+            };
+
+            // Insert into PlayersMap
+            players.insert(character_id_string.clone(), player_state.clone());
+
+            println!("Character {} selected and added to PlayersMap", character_id_string);
+
+            let _ = ws.send(Message::Text(
+                serde_json::json!({
+                    "type": "select_character_success",
+                    "character_id": character_id
+                }).to_string().into()
+            )).await;
+        }
+        Ok(None) => {
+            let _ = ws.send(Message::Text(
+                serde_json::json!({
+                    "type": "select_character_error",
+                    "message": "ไม่พบตัวละคร"
+                }).to_string().into()
+            )).await;
+        }
+        Err(e) => {
+            eprintln!("Error loading character: {:?}", e);
+            let _ = ws.send(Message::Text(
+                serde_json::json!({
+                    "type": "select_character_error",
+                    "message": "เกิดข้อผิดพลาดในการโหลดตัวละคร"
+                }).to_string().into()
+            )).await;
         }
     }
 }

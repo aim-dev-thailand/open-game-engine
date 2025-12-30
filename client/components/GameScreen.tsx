@@ -122,6 +122,7 @@ type SkillType = {
 export default function GameScreen({ username, character, onLogout, role = 'user' }: GameScreenProps) {
   const rendererRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
+  const playerMeshRef = useRef<any>(null);
   const mapMeshesRef = useRef<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const facingDir = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -162,12 +163,24 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
   // WebSocket setup
   useEffect(() => {
+    // Close existing WebSocket if any
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
     wsRef.current = new WebSocket(WS_API);
 
     wsRef.current.onopen = () => {
       console.log('WebSocket connected in GameScreen');
+      // Select character first
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && character.id) {
+        wsRef.current.send(JSON.stringify({
+          type: 'select_character',
+          character_id: character.id
+        }));
+      }
       // Request map data on connection
-      if (wsRef.current) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'load_map' }));
       }
     };
@@ -231,6 +244,30 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             }
             break;
           }
+          case 'position_update': {
+            // Update player position from server
+            if (playerMeshRef.current && data.x !== undefined && data.y !== undefined) {
+              // Server sends x, y -> map to 3D world (x, 0, z)
+              // Server y corresponds to client z (depth)
+              playerMeshRef.current.position.x = data.x;
+              playerMeshRef.current.position.z = data.y;
+              console.log('Player position updated:', { x: data.x, z: data.y });
+            } else {
+              console.warn('Position update failed:', {
+                hasMesh: !!playerMeshRef.current,
+                x: data.x,
+                y: data.y
+              });
+            }
+            break;
+          }
+          case 'select_character_success':
+            console.log('Character selected successfully:', data.character_id);
+            break;
+          case 'select_character_error':
+            console.error('Character selection error:', data.message);
+            Alert.alert('ข้อผิดพลาด', data.message);
+            break;
           default:
             // Handle other message types
             console.log('Unhandled message type:', data);
@@ -254,7 +291,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [character.id]);
 
   useEffect(() => {
     const moveInterval = setInterval(() => {
@@ -263,20 +300,27 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
       const now = Date.now();
       if (now - lastMoveTime.current > 100) {
-        if (wsRef.current) {
-          // Normalize vector if needed, or just send raw values 
-          // Server expects x, y delta or absolute? 
-          // Usually 'move' implies delta or direction. 
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          // Normalize vector if needed, or just send raw values
+          // Server expects x, y delta or absolute?
+          // Usually 'move' implies delta or direction.
           // client_handler.rs handle_move adds x*speed, y*speed.
           // So passing direction vector is correct.
-          wsRef.current.send(JSON.stringify({ type: 'move', x, y }));
+          const moveMsg = {
+            type: 'move',
+            player_id: character.id || username,
+            x,
+            y
+          };
+          console.log('Sending move:', moveMsg);
+          wsRef.current.send(JSON.stringify(moveMsg));
           lastMoveTime.current = now;
         }
       }
     }, 50); // Check frequently
 
     return () => clearInterval(moveInterval);
-  }, []);
+  }, [username, character.id]);
 
   // Update map tiles when mapData changes
   useEffect(() => {
@@ -442,6 +486,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       playerMesh.position.y = 0.5;
       playerMesh.rotation.x = -Math.PI / 4;
       scene.add(playerMesh);
+      playerMeshRef.current = playerMesh;
       console.log('Player mesh added to scene');
 
       // Render map tiles if mapData exists
