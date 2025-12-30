@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Image, TouchableWithoutFeedback } from 'react-native';
 import { Asset } from 'expo-asset';
 import { TILESETS } from '@/assets/tilesets';
 
@@ -58,6 +58,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
   const [showTilesetPicker, setShowTilesetPicker] = useState(false);
   const [showTileSelector, setShowTileSelector] = useState(false);
   const [tilesetDimensions, setTilesetDimensions] = useState<{ width: number; height: number } | null>(null);
+  const imageRef = useRef<View>(null);
 
   useEffect(() => {
     if (map) {
@@ -319,25 +320,62 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                   </View>
                   <ScrollView style={{ flex: 1, padding: 10 }} contentContainerStyle={{ alignItems: 'center' }}>
                     <ScrollView horizontal>
-                      <TouchableOpacity
-                        activeOpacity={1}
-                        onPress={(e) => {
-                          const { locationX, locationY } = e.nativeEvent;
-                          const x = Math.floor(locationX / 32);
-                          const y = Math.floor(locationY / 32);
-                          setSelectedTileX(x);
-                          setSelectedTileY(y);
-                          setShowTileSelector(false);
+                      <View
+                        ref={imageRef}
+                        onLayout={() => {
+                          // Store the layout of the image container
+                          imageRef.current?.measure((x, y, width, height, pageX, pageY) => {
+                            console.log('Image layout:', { x, y, width, height, pageX, pageY });
+                          });
                         }}
                       >
-                        {selectedTileset && getTilesetImageSource(selectedTileset) && (
-                          <Image
-                            source={getTilesetImageSource(selectedTileset)!}
-                            style={{ width: tilesetDimensions?.width, height: tilesetDimensions?.height }}
-                          />
-                        )}
-                        {/* Grid Overlay (Optional, could be performance heavy for large images) */}
-                      </TouchableOpacity>
+                        <TouchableWithoutFeedback
+                          onPress={(e) => {
+                            // Get absolute page coordinates
+                            const { pageX, pageY } = e.nativeEvent;
+                            console.log('Press pageX/pageY:', { pageX, pageY });
+
+                            // Measure the image to get its position on screen
+                            imageRef.current?.measure((fx, fy, width, height, px, py) => {
+                              console.log('Image measure:', { fx, fy, width, height, px, py });
+
+                              // Calculate relative position within the image
+                              const relativeX = pageX - px;
+                              const relativeY = pageY - py;
+                              console.log('Relative coords:', { relativeX, relativeY });
+
+                              if (relativeX >= 0 && relativeY >= 0 && relativeX < width && relativeY < height) {
+                                const x = Math.floor(relativeX / 32);
+                                const y = Math.floor(relativeY / 32);
+                                console.log('Calculated tile coords:', { x, y });
+
+                                // Validate coordinates are within tileset bounds
+                                const maxTilesX = tilesetDimensions ? Math.floor(tilesetDimensions.width / 32) : 16;
+                                const maxTilesY = tilesetDimensions ? Math.floor(tilesetDimensions.height / 32) : 16;
+
+                                if (x >= 0 && y >= 0 && x < maxTilesX && y < maxTilesY) {
+                                  setSelectedTileX(x);
+                                  setSelectedTileY(y);
+                                  setShowTileSelector(false);
+                                  console.log('Tile selected:', { x, y });
+                                } else {
+                                  console.warn('Tile coords out of bounds:', { x, y, maxTilesX, maxTilesY });
+                                }
+                              } else {
+                                console.warn('Click outside image bounds:', { relativeX, relativeY, width, height });
+                                Alert.alert('ข้อผิดพลาด', 'กรุณาคลิกภายในรูป Tileset');
+                              }
+                            });
+                          }}
+                        >
+                          {selectedTileset && getTilesetImageSource(selectedTileset) && (
+                            <Image
+                              source={getTilesetImageSource(selectedTileset)!}
+                              style={{ width: tilesetDimensions?.width, height: tilesetDimensions?.height }}
+                            />
+                          )}
+                        </TouchableWithoutFeedback>
+                      </View>
                     </ScrollView>
                   </ScrollView>
                 </View>

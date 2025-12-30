@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ScrollView, Modal, Alert } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
 import { Asset } from 'expo-asset';
@@ -53,13 +53,25 @@ type ItemType = {
   };
 };
 
+type MapTileType = {
+  id?: number;
+  x: number;
+  y: number;
+  type: 'ground' | 'wall' | 'water' | 'grass' | 'road' | 'obstacle';
+  walkable: boolean;
+  sprite_id?: string;
+  tileset_id?: number;
+  tileX?: number;
+  tileY?: number;
+};
+
 type MapType = {
   id?: number;
   name: string;
   description: string;
   width: number;
   height: number;
-  tiles: any[];
+  tiles: MapTileType[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
 };
@@ -154,6 +166,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
     wsRef.current.onopen = () => {
       console.log('WebSocket connected in GameScreen');
+      // Request map data on connection
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'load_map' }));
+      }
     };
 
     wsRef.current.onmessage = (event) => {
@@ -194,8 +210,30 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             console.error('Skill save error:', data.message);
             Alert.alert('ข้อผิดพลาด', data.message);
             break;
+          case 'maps_loaded': {
+            // Load the first map or a specific map for the game
+            if (data.maps && data.maps.length > 0) {
+              const firstMap = data.maps[0];
+              console.log('Loading first map:', firstMap);
+              console.log('Map tiles count:', firstMap.tiles?.length || 0);
+              console.log('First few tiles:', firstMap.tiles?.slice(0, 3));
+              setMapData(firstMap);
+            } else {
+              console.warn('No maps received from server');
+            }
+            break;
+          }
+          case 'map_loaded': {
+            // Single map loaded
+            if (data.map) {
+              console.log('Map loaded:', data.map);
+              setMapData(data.map);
+            }
+            break;
+          }
           default:
             // Handle other message types
+            console.log('Unhandled message type:', data);
             break;
         }
       } catch (e) {
@@ -240,6 +278,103 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     return () => clearInterval(moveInterval);
   }, []);
 
+  // Update map tiles when mapData changes
+  useEffect(() => {
+    console.log('Map tiles useEffect triggered');
+    console.log('sceneRef.current:', !!sceneRef.current);
+    console.log('mapData:', mapData);
+
+    if (!sceneRef.current || !mapData) {
+      console.warn('Scene or mapData not ready yet');
+      return;
+    }
+
+    console.log('Updating map tiles for mapData:', mapData.name);
+    console.log('Total tiles to render:', mapData.tiles?.length || 0);
+
+    // Clear old map meshes
+    mapMeshesRef.current.forEach(mesh => {
+      sceneRef.current?.remove(mesh);
+      mesh.geometry.dispose();
+      if (mesh.material instanceof THREE.Material) {
+        mesh.material.dispose();
+      }
+    });
+    mapMeshesRef.current = [];
+
+    // Render new map tiles
+    if (mapData.tiles && Array.isArray(mapData.tiles)) {
+      console.log('Starting to render tiles...');
+      const textureLoader = new TextureLoader();
+      const tileSize = 1;
+      let skippedTiles = 0;
+      let renderedTiles = 0;
+
+      mapData.tiles.forEach((tile: any, index: number) => {
+        if (!tile.tileset_id || tile.tileX === undefined || tile.tileY === undefined) {
+          skippedTiles++;
+          if (index < 3) {
+            console.log(`Skipping tile ${index}:`, tile);
+          }
+          return;
+        }
+
+        try {
+          const tilesetSource = TILESETS[tile.tileset_id];
+          if (!tilesetSource) return;
+
+          const tileAsset = Asset.fromModule(tilesetSource);
+          const tileTexture = textureLoader.load(tileAsset);
+          tileTexture.magFilter = THREE.NearestFilter;
+          tileTexture.minFilter = THREE.NearestFilter;
+
+          const tilesetWidth = 512;
+          const tilesetHeight = 512;
+          const tilePixelSize = 32;
+
+          const uLeft = (tile.tileX * tilePixelSize) / tilesetWidth;
+          const uRight = ((tile.tileX + 1) * tilePixelSize) / tilesetWidth;
+          const vBottom = 1 - ((tile.tileY + 1) * tilePixelSize) / tilesetHeight;
+          const vTop = 1 - (tile.tileY * tilePixelSize) / tilesetHeight;
+
+          const tileGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+          const uvs = tileGeometry.attributes.uv;
+          uvs.setXY(0, uLeft, vTop);
+          uvs.setXY(1, uRight, vTop);
+          uvs.setXY(2, uLeft, vBottom);
+          uvs.setXY(3, uRight, vBottom);
+          uvs.needsUpdate = true;
+
+          const tileMaterial = new THREE.MeshBasicMaterial({
+            map: tileTexture,
+            transparent: true,
+            side: THREE.DoubleSide
+          });
+
+          const tileMesh = new THREE.Mesh(tileGeometry, tileMaterial);
+          tileMesh.position.set(tile.x * tileSize, 0, tile.y * tileSize);
+          tileMesh.rotation.x = -Math.PI / 2;
+          sceneRef.current?.add(tileMesh);
+          mapMeshesRef.current.push(tileMesh);
+          renderedTiles++;
+
+          if (renderedTiles <= 3) {
+            console.log(`Rendered tile ${renderedTiles}:`, {
+              position: { x: tile.x, y: tile.y },
+              tileset: tile.tileset_id,
+              tileCoords: { x: tile.tileX, y: tile.tileY }
+            });
+          }
+        } catch (e) {
+          console.error('Error rendering tile:', tile, e);
+        }
+      });
+
+      console.log(`Map tiles rendering complete: ${renderedTiles} rendered, ${skippedTiles} skipped`);
+      console.log('Total meshes in scene:', mapMeshesRef.current.length);
+    }
+  }, [mapData]);
+
   const addDamage = (x: number, y: number, dmg: number, isCrit: boolean) => {
     const id = Date.now();
     setDamages(prev => [...prev, { id, x, y, damage: dmg, is_critical: isCrit }]);
@@ -276,11 +411,19 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
     try {
       console.log('Loading sprite asset...', spriteId);
-      const keys = Object.keys(CHARACTERS);
-      for (const item of keys) {
+      const charKeys = Object.keys(CHARACTERS);
+      for (const item of charKeys) {
         const asset = Asset.fromModule(CHARACTERS[Number(item)]);
         await asset.downloadAsync();
         console.log('Sprite asset downloaded:', asset.localUri);
+      }
+
+      console.log('Loading tiles asset...', spriteId);
+      const tileKeys = Object.keys(TILESETS);
+      for (const item of tileKeys) {
+        const asset = Asset.fromModule(TILESETS[Number(item)]);
+        await asset.downloadAsync();
+        console.log('Sprite tiles downloaded:', asset.localUri);
       }
 
       const charAsset = Asset.fromModule(spriteAssetSource);
@@ -300,6 +443,64 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       playerMesh.rotation.x = -Math.PI / 4;
       scene.add(playerMesh);
       console.log('Player mesh added to scene');
+
+      // Render map tiles if mapData exists
+      if (mapData && mapData.tiles && Array.isArray(mapData.tiles)) {
+        console.log('Rendering map tiles:', mapData.tiles.length);
+        const textureLoader = new TextureLoader();
+        const tileSize = 1; // Size of each tile in 3D space
+
+        for (const tile of mapData.tiles) {
+          if (!tile.tileset_id || tile.tileX === undefined || tile.tileY === undefined) {
+            continue; // Skip tiles without tileset info
+          }
+
+          try {
+            const tilesetSource = TILESETS[tile.tileset_id];
+            if (!tilesetSource) continue;
+
+            const tileAsset = Asset.fromModule(tilesetSource);
+            const tileTexture = textureLoader.load(tileAsset);
+            tileTexture.magFilter = THREE.NearestFilter;
+            tileTexture.minFilter = THREE.NearestFilter;
+
+            // Calculate UV coordinates for the specific tile
+            // Assuming 32x32 tiles in the tileset
+            const tilesetWidth = 512; // Adjust based on actual tileset size
+            const tilesetHeight = 512;
+            const tilePixelSize = 32;
+
+            const uLeft = (tile.tileX * tilePixelSize) / tilesetWidth;
+            const uRight = ((tile.tileX + 1) * tilePixelSize) / tilesetWidth;
+            const vBottom = 1 - ((tile.tileY + 1) * tilePixelSize) / tilesetHeight;
+            const vTop = 1 - (tile.tileY * tilePixelSize) / tilesetHeight;
+
+            // Create geometry with custom UVs
+            const tileGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+            const uvs = tileGeometry.attributes.uv;
+            uvs.setXY(0, uLeft, vTop);     // TL
+            uvs.setXY(1, uRight, vTop);    // TR
+            uvs.setXY(2, uLeft, vBottom);  // BL
+            uvs.setXY(3, uRight, vBottom); // BR
+            uvs.needsUpdate = true;
+
+            const tileMaterial = new THREE.MeshBasicMaterial({
+              map: tileTexture,
+              transparent: true,
+              side: THREE.DoubleSide
+            });
+
+            const tileMesh = new THREE.Mesh(tileGeometry, tileMaterial);
+            tileMesh.position.set(tile.x * tileSize, 0, tile.y * tileSize);
+            tileMesh.rotation.x = -Math.PI / 2; // Lay flat on ground
+            scene.add(tileMesh);
+            mapMeshesRef.current.push(tileMesh);
+          } catch (e) {
+            console.error('Error loading tile:', tile, e);
+          }
+        }
+        console.log('Map tiles rendered:', mapMeshesRef.current.length);
+      }
     } catch (e) {
       console.error('Error loading sprite:', e);
     }
@@ -501,6 +702,12 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         </Text>
       </View>
 
+      {mapData &&
+        <View style={styles.mapInfo}>
+          <Text style={styles.mapInfoText}>{mapData.name}</Text>
+        </View>
+      }
+
       {damages.map(d => (
         <DamageFloater
           key={d.id}
@@ -667,6 +874,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
+    width: 180,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -684,6 +892,24 @@ const styles = StyleSheet.create({
   },
   adminRoleText: {
     color: '#f59e0b',
+    fontWeight: 'bold',
+  },
+
+  // Map Info
+  mapInfo: { 
+    position: 'absolute', 
+    top: 12, 
+    left: 200, 
+    backgroundColor: 'white', 
+    paddingVertical: 4, 
+    paddingHorizontal: 12, 
+    borderRadius: 8,
+    width: 200,
+    alignItems: 'center',
+  },
+  mapInfoText: { 
+    color: 'black', 
+    fontSize: 14, 
     fontWeight: 'bold',
   },
 
