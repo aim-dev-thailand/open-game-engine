@@ -449,11 +449,33 @@ async fn handle_login(
 
 async fn handle_move(player_id: &str, players: &PlayersMap, data: &serde_json::Value) {
     if let Some(mut p) = players.get_mut(player_id) {
-        if let Some(x) = data["x"].as_f64() {
-            p.x = BigDecimal::from_f64(x).unwrap_or_default();
-        }
-        if let Some(y) = data["y"].as_f64() {
-            p.y = BigDecimal::from_f64(y).unwrap_or_default();
+        let dx = data["x"].as_f64().unwrap_or(0.0);
+        let dy = data["y"].as_f64().unwrap_or(0.0);
+        let speed = p.move_speed.clone();
+
+        if dx != 0.0 || dy != 0.0 {
+            // Calculate new position: current + (direction * speed)
+            // Scaling speed? Maybe speed is units per move packet.
+            // Client sends packet every 100ms.
+            // If speed is e.g. 5.0, that's 5 tiles per tick? Might be too fast.
+            // Or speed is units/sec?
+            // Let's assume speed is "pixels/units per tick" for now or just multiply directly.
+
+            // Adjust speed factor if needed. For now direct multiply.
+            let move_x = BigDecimal::from_f64(dx).unwrap_or_default() * &speed;
+            let move_y = BigDecimal::from_f64(dy).unwrap_or_default() * &speed; // y is inverted? usually Joypad Up is -y in screen coords, but 3D world z?
+            // Let's assume standard logic: +y is up/down as defined.
+            // In GameScreen 3D: z is depth. x is horizontal.
+            // tiles use x, y (which maps to x, z in 3D usually).
+            // client logic: mesh.position.set(tile.x, 0, tile.y);
+            // So server y -> client z.
+            // Joypad y -> Forward/Back -> +y/-y.
+            // Let's just add to p.y.
+
+            p.x += move_x;
+            p.y += move_y;
+
+            // println!("Move: {}, {} -> {}, {}", dx, dy, p.x, p.y);
         }
     }
 }

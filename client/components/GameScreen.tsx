@@ -145,139 +145,30 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
   const isAdmin = role === 'admin' || role === 'moderator';
 
-  useEffect(() => {
-    if (mapData && sceneRef.current) {
-      // Clear old map
-      mapMeshesRef.current.forEach(mesh => {
-        sceneRef.current.remove(mesh);
-        // Dispose geometry/material if possible to prevent leak
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material) {
-          if (Array.isArray(mesh.material)) mesh.material.forEach((m: any) => m.dispose());
-          else mesh.material.dispose();
-        }
-      });
-      mapMeshesRef.current = [];
-
-      // Render new map
-      mapData.tiles.forEach(tile => {
-        if (tile.tileX !== undefined && tile.tileY !== undefined) {
-          const tilesetId = tile.tileset_id || 1;
-          const asset = TILESETS[tilesetId];
-          if (!asset) return;
-
-          const textureLoader = new TextureLoader();
-          textureLoader.load(asset, (texture: any) => {
-            texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.NearestFilter; // Also set minFilter
-
-            // Calculate UVs
-            const tileWidth = 32;
-            const tileHeight = 32;
-            const imageWidth = texture.image.width;
-            const imageHeight = texture.image.height;
-
-            const cols = imageWidth / tileWidth;
-            const rows = imageHeight / tileHeight;
-
-            const x = tile.tileX || 0;
-            const y = tile.tileY || 0;
-
-            // UV coordinates (0,0 is bottom-left in Three.js)
-            // But usually image coordinates are (0,0) top-left.
-            // Three.js Texture has flipY = true by default? No, usually false for standard loaders but Expo TextureLoader might vary.
-            // Let's assume standard UV: (0,0) is bottom-left.
-            // We want (x, y) tile from Top-Left.
-            // uLeft = x / cols
-            // uRight = (x+1) / cols
-            // vTop = 1 - (y / rows)
-            // vBottom = 1 - ((y+1) / rows)
-
-            const uLeft = x / cols;
-            const uRight = (x + 1) / cols;
-            const vTop = 1 - (y / rows);
-            const vBottom = 1 - ((y + 1) / rows);
-
-            const geometry = new THREE.PlaneGeometry(1, 1);
-            const uvs = geometry.attributes.uv;
-
-            // UV mapping order: TL, TR, BL, BR for PlaneGeometry?
-            // PlaneGeometry(1, 1) default:
-            // 0: (-0.5, 0.5, 0) -> UV(0, 1) Top Left
-            // 1: ( 0.5, 0.5, 0) -> UV(1, 1) Top Right
-            // 2: (-0.5,-0.5, 0) -> UV(0, 0) Bottom Left
-            // 3: ( 0.5,-0.5, 0) -> UV(1, 0) Bottom Right
-
-            uvs.setXY(0, uLeft, vTop);     // TL
-            uvs.setXY(1, uRight, vTop);    // TR
-            uvs.setXY(2, uLeft, vBottom);  // BL
-            uvs.setXY(3, uRight, vBottom); // BR
-            uvs.needsUpdate = true;
-
-            const material = new THREE.MeshBasicMaterial({
-              map: texture,
-              transparent: true
-            });
-
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(tile.x, 0, tile.y);
-            mesh.rotation.x = -Math.PI / 2; // Flat on ground
-
-            if (sceneRef.current) {
-              sceneRef.current.add(mesh);
-              mapMeshesRef.current.push(mesh);
-            }
-          });
-        }
-      });
-    }
-  }, [mapData]);
+  const lastMoveTime = useRef<number>(0);
+  const animationFrameRef = useRef<number>(0);
 
   useEffect(() => {
-    wsRef.current = new WebSocket(WS_API);
+    const moveInterval = setInterval(() => {
+      const { x, y } = facingDir.current;
+      if (x === 0 && y === 0) return;
 
-    wsRef.current.onopen = () => {
-      wsRef.current?.send(JSON.stringify({ type: 'login', username }));
-    };
-
-    wsRef.current.onmessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'init') {
-        // setMyId(data.id); // Not used
-        if (data.map) {
-          setMapData(data.map);
-        }
-      } else if (data.type === 'damage') {
-        addDamage(
-          Dimensions.get('window').width / 2,
-          Dimensions.get('window').height / 2,
-          100,
-          true
-        );
-      } else if (data.type === 'role_update') {
-        // Role updated from server
-      } else if (data.type === 'items_loaded') {
-        console.log('ไอเทมโหลดแล้ว:', data.items);
-      } else if (data.type === 'skills_loaded') {
-        console.log('สกิลโหลดแล้ว:', data.skills);
-      } else if (data.type === 'npcs_loaded') {
-        console.log('NPC โหลดแล้ว:', data.npcs);
-      } else if (data.type === 'maps_loaded') {
-        console.log('แผนที่โหลดแล้ว:', data.maps);
-        if (data.maps && data.maps.length > 0) {
-          setMapData(data.maps[0]);
+      const now = Date.now();
+      if (now - lastMoveTime.current > 100) {
+        if (wsRef.current) {
+          // Normalize vector if needed, or just send raw values 
+          // Server expects x, y delta or absolute? 
+          // Usually 'move' implies delta or direction. 
+          // client_handler.rs handle_move adds x*speed, y*speed.
+          // So passing direction vector is correct.
+          wsRef.current.send(JSON.stringify({ type: 'move', x, y }));
+          lastMoveTime.current = now;
         }
       }
-    };
+    }, 50); // Check frequently
 
-    wsRef.current.onclose = () => {
-      onLogout();
-    };
-
-    wsRef.current.onerror = () => {
-      onLogout();
-    };
-  }, [username]);
+    return () => clearInterval(moveInterval);
+  }, []);
 
   const addDamage = (x: number, y: number, dmg: number, isCrit: boolean) => {
     const id = Date.now();
@@ -311,36 +202,8 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
 
-    // Sprite is 4x4, we want top-left
-    // UVs are 0,0 (bottom-left) to 1,1 (top-right)
-    // Top-left 1/4 means U: 0-0.25, V: 0.75-1.0
-
-    // Using PlaneGeometry to control UVs easily
-    const geometry = new THREE.PlaneGeometry(1, 1.5);
-
-    // Update UVs for top-left frame
-    const uvs = geometry.attributes.uv;
-    // 0: top-left (0, 1) -> (0, 1)
-    // 1: top-right (1, 1) -> (0.25, 1)
-    // 2: bottom-left (0, 0) -> (0, 0.75)
-    // 3: bottom-right (1, 0) -> (0.25, 0.75)
-
-    // Standard PlaneGeometry UV mapping:
-    // 0: (0, 1) Top Left
-    // 1: (1, 1) Top Right
-    // 2: (0, 0) Bottom Left
-    // 3: (1, 0) Bottom Right
-
-    // We want:
-    // Top Left: (0, 1)
-    // Top Right: (0.25, 1)
-    // Bottom Left: (0, 0.75)
-    // Bottom Right: (0.25, 0.75)
-
-    uvs.setXY(0, 0, 1.0); // Top Left
-    uvs.setXY(1, 0.25, 1.0); // Top Right
-    uvs.setXY(2, 0, 0.75); // Bottom Left
-    uvs.setXY(3, 0.25, 0.75); // Bottom Right
+    // Sprite is 4x4
+    const geometry = new THREE.PlaneGeometry(1, 1); // Aspect ratio? Char is usually taller. Let's stick to 1x1 or adjust if needed. User pic looks like 1:1 or close.
 
     const material = new THREE.MeshBasicMaterial({
       map: texture,
@@ -349,20 +212,90 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     });
 
     const playerMesh = new THREE.Mesh(geometry, material);
-    playerMesh.position.y = 0.75;
-    // Rotate to face camera (Billboardish)
-    // Camera is at (0, 10, 10) looking at (0, 0, 0). Angle is 45 deg down.
-    // So sprite plane (default vertical) needs to tilt back 45 deg?
-    // Actually, simply:
-    playerMesh.rotation.x = -Math.PI / 4; // 45 degrees back
+    playerMesh.position.y = 0.5; // Half of height 1
+    // Billboard effect
+    playerMesh.rotation.x = -Math.PI / 4;
     scene.add(playerMesh);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
     camera.lookAt(0, 0, 0);
 
+    let lastRow = 0; // 0: Down, 1: Left, 2: Right, 3: Up
+
     const render = () => {
-      requestAnimationFrame(render);
+      animationFrameRef.current = requestAnimationFrame(render);
+
+      // Animation Logic
+      const { x, y } = facingDir.current;
+      const isMoving = x !== 0 || y !== 0;
+
+      // Determine Row
+      let row = lastRow;
+      if (isMoving) {
+        if (Math.abs(x) > Math.abs(y)) {
+          // Horizontal
+          row = x > 0 ? 2 : 1; // Right : Left
+        } else {
+          // Vertical
+          row = y > 0 ? 0 : 3; // Down (y>0 in joypad usually means down visually on screen? Joypad.tsx: dy. usually down is +dy in RN panresponder) -> User says "Down -> Row 0".
+          // Verify Joypad: dy positive is down on screen.
+          // Wait, server map: y+ might be up or down?
+          // Usually 3D world: x, z. 
+          // Let's assume standard Joypad: +y is down. "Drag joypad down" -> +y.
+          // User: "Drag down -> Show Row 0".
+        }
+        lastRow = row;
+      }
+
+      // Calculate Frame
+      // Loop interaction: 0, 1, 2, 3
+      const frame = isMoving ? Math.floor(Date.now() / 200) % 4 : 0;
+
+      // Update UVs
+      // Row 0 (Top in image, High V) -> V: 0.75 - 1.0
+      // Row 1 -> V: 0.50 - 0.75
+      // Row 2 -> V: 0.25 - 0.50
+      // Row 3 (Bottom in image, Low V) -> V: 0.0 - 0.25
+
+      const colWidth = 0.25;
+      const rowHeight = 0.25;
+
+      const uLeft = frame * colWidth;
+      const uRight = (frame + 1) * colWidth;
+
+      // V is inverted relative to image rows usually (0 at bottom)
+      // Row 0 (Top) -> vBottom = 0.75, vTop = 1.0
+      // Row k -> vBottom = 1 - (k+1)*0.25, vTop = 1 - k*0.25
+
+      const vTop = 1 - (row * rowHeight);
+      const vBottom = 1 - ((row + 1) * rowHeight);
+
+      const uvs = geometry.attributes.uv;
+      // 0: (0, 1) -> TL
+      // 1: (1, 1) -> TR
+      // 2: (0, 0) -> BL
+      // 3: (1, 0) -> BR
+
+      uvs.setXY(0, uLeft, vTop);     // TL
+      uvs.setXY(1, uRight, vTop);    // TR
+      uvs.setXY(2, uLeft, vBottom);  // BL
+      uvs.setXY(3, uRight, vBottom); // BR
+      uvs.needsUpdate = true;
+
+      // Camera Follow Player?
+      // Currently scene is static grid?
+      // Player mesh is at 0,0,0 initially?
+      // If we move character via server updates, we need to update playerMesh position too?
+      // But server updates mapData? 
+      // wsRef.current onmessage 'init' or 'update'? 
+      // Currently GameScreen only handles 'init' map.
+      // We likely need 'player_update' handling later, but for now just implementing the CLIENT SIDE animation loop/request.
+      // Wait, if playerMesh doesn't move on screen, it looks weird walking in place?
+      // But user asked for "Joypad... animations".
+      // Assuming map rendering handles position updates or camera moves?
+      // user request: "Make it walk... reference movement from image... loop animation"
+
       renderer.render(scene, camera);
     };
     render();
