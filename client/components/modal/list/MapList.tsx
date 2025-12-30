@@ -10,7 +10,6 @@ type MapType = {
   tiles: any[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { id: number; x: number; y: number }[];
 };
 
 type MapListProps = {
@@ -25,44 +24,41 @@ export default function MapList({ visible, onClose, onEditMap, wsRef }: MapListP
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!visible) return;
+
+    const loadMaps = () => {
+      setLoading(true);
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'load_map' }));
+      }
+    };
 
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'maps_loaded') {
-          console.log(data.maps);
+          console.log('Maps loaded:', data.maps);
           setMaps(data.maps);
           setLoading(false);
         }
       } catch (e) {
         console.error('Error parsing map list:', e);
+        setLoading(false);
       }
     };
 
     if (wsRef.current) {
-      // Use addEventListener if supported, or rely on a global dispatcher if needed.
-      // Since RN WebSocket implementation is standard-compliant:
       wsRef.current.addEventListener('message', handleMessage);
-
-      // Send request AFTER adding listener
-      setTimeout(() => {
-        loadMaps();
-      }, 1000);
+      // โหลดแผนที่ทันทีหลังจากเพิ่ม listener
+      loadMaps();
     }
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.removeEventListener('message', handleMessage);
+      if (wsRef!.current) {
+        wsRef!.current.removeEventListener('message', handleMessage);
       }
     };
   }, [visible]);
-
-  const loadMaps = () => {
-    setLoading(true);
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'load_map' }));
-    }
-  };
 
   const getTileCount = (tiles: any[]) => {
     return tiles ? tiles.length : 0;
@@ -114,9 +110,6 @@ export default function MapList({ visible, onClose, onEditMap, wsRef }: MapListP
                       </Text>
                       <Text style={styles.mapDetailText}>
                         👤 NPC: {map.npcs?.length || 0} ตัว
-                      </Text>
-                      <Text style={styles.mapDetailText}>
-                        👾 มอนสเตอร์: {map.monsters?.length || 0} ตัว
                       </Text>
                     </View>
                     {map.spawn_points && map.spawn_points.length > 0 && (

@@ -25,7 +25,6 @@ type MapType = {
   tiles: MapTileType[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { id: number; x: number; y: number }[];
   tileset_id?: number;
 };
 
@@ -49,7 +48,6 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
     tiles: [],
     spawn_points: [],
     npcs: [],
-    monsters: [],
     tileset_id: 1,
   });
 
@@ -74,7 +72,6 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
         tiles: [],
         spawn_points: [],
         npcs: [],
-        monsters: [],
         tileset_id: 1,
       });
       setSelectedTileset(1);
@@ -254,6 +251,10 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
               </View>
             </View>
 
+            <TouchableOpacity style={styles.generateButton} onPress={generateTiles}>
+              <Text style={styles.generateButtonText}>กำหนดขนาด Tiles</Text>
+            </TouchableOpacity>
+
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Tileset</Text>
             </View>
@@ -378,10 +379,6 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
               </View>
             )}
 
-            <TouchableOpacity style={styles.generateButton} onPress={generateTiles}>
-              <Text style={styles.generateButtonText}>สร้าง Tiles</Text>
-            </TouchableOpacity>
-
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>ตัวแก้ไข Tiles</Text>
             </View>
@@ -460,9 +457,11 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
               ))}
             </View>
 
-            <TouchableOpacity style={styles.addButton} onPress={addSpawnPoint}>
-              <Text style={styles.addButtonText}>+ เพิ่มจุดเริ่มต้น</Text>
-            </TouchableOpacity>
+            {!formData.spawn_points || formData.spawn_points.length === 0 &&
+              <TouchableOpacity style={styles.addButton} onPress={addSpawnPoint}>
+                <Text style={styles.addButtonText}>+ เพิ่มจุดเริ่มต้น</Text>
+              </TouchableOpacity>
+            }
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>NPCs</Text>
@@ -493,37 +492,6 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
               }}
             >
               <Text style={styles.addButtonText}>+ เพิ่ม NPC</Text>
-            </TouchableOpacity>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>มอนสเตอร์</Text>
-            </View>
-
-            <View style={styles.monsterList}>
-              {formData.monsters.map((monster, index) => (
-                <View key={index} style={styles.monsterItem}>
-                  <Text style={styles.monsterText}>NPC ID: {monster.id} ที่ ({monster.x}, {monster.y})</Text>
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => setFormData(prev => ({
-                      ...prev,
-                      monsters: prev.monsters.filter((_, i) => i !== index),
-                    }))}
-                  >
-                    <Text style={styles.removeButtonText}>ลบ</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                const newMonster = { id: 0, x: Math.floor(formData.width / 2), y: Math.floor(formData.height / 2) };
-                setFormData(prev => ({ ...prev, monsters: [...prev.monsters, newMonster] }));
-              }}
-            >
-              <Text style={styles.addButtonText}>+ เพิ่มมอนสเตอร์</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>

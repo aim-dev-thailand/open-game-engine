@@ -18,7 +18,6 @@ use tokio::net::TcpListener;
 
 // Type aliases สำหรับ shared state
 type PlayersMap = Arc<DashMap<String, PlayerState>>;
-type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
 type ItemsMap = Arc<DashMap<i32, ItemData>>;
 type MapsMap = Arc<DashMap<i32, MapData>>;
 type NpcsMap = Arc<DashMap<i32, NpcData>>;
@@ -33,7 +32,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // กำหนดข้อมูลในหน่วยความจำ
     let players: PlayersMap = Arc::new(DashMap::new());
-    let monsters: MonstersMap = Arc::new(DashMap::new());
     let items: ItemsMap = Arc::new(DashMap::new());
     let maps: MapsMap = Arc::new(DashMap::new());
     let npcs: NpcsMap = Arc::new(DashMap::new());
@@ -93,7 +91,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ws_stream = tokio_tungstenite::accept_async(stream).await?;
         let pool_ref = pool.clone();
         let players_ref = players.clone();
-        let monsters_ref = monsters.clone();
         let items_ref = items.clone();
         let maps_ref = maps.clone();
         let npcs_ref = npcs.clone();
@@ -105,7 +102,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ws_stream,
                 pool_ref,
                 players_ref,
-                monsters_ref,
                 items_ref,
                 maps_ref,
                 npcs_ref,

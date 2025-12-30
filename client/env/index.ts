@@ -1,1 +1,1 @@
-export const WS_API = 'ws://192.168.1.120:8080';
+export const WS_API = 'ws://192.168.1.122:8080';

@@ -9,7 +9,6 @@ use std::sync::Arc;
 use tokio_tungstenite::tungstenite::Message;
 
 pub type PlayersMap = Arc<DashMap<String, PlayerState>>;
-pub type MonstersMap = Arc<DashMap<String, MonsterInstance>>;
 pub type ItemsMap = Arc<DashMap<i32, ItemData>>;
 pub type MapsMap = Arc<DashMap<i32, MapData>>;
 pub type NpcsMap = Arc<DashMap<i32, NpcData>>;
@@ -21,7 +20,6 @@ pub async fn handle_client(
     ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     pool: PgPool,
     players: PlayersMap,
-    monsters: MonstersMap,
     items: ItemsMap,
     maps: MapsMap,
     npcs: NpcsMap,
@@ -48,7 +46,7 @@ pub async fn handle_client(
                         }
                         Some("attack") => {
                             player_id = data["player_id"].as_str().unwrap_or("").to_string();
-                            handle_attack(&player_id, &players, &monsters);
+                            handle_attack(&player_id, &players, &npcs);
                         }
                         Some("cast_skill") => {
                             player_id = data["player_id"].as_str().unwrap_or("").to_string();
@@ -524,13 +522,8 @@ async fn handle_save_map(
                 map_to_save.id = Some(id);
             }
 
-            // Serialize complex fields
-            let tiles_json =
-                serde_json::to_value(&map_to_save.tiles).unwrap_or(serde_json::json!([]));
-            let spawn_points_json =
-                serde_json::to_value(&map_to_save.spawn_points).unwrap_or(serde_json::json!([]));
-            let npcs_json =
-                serde_json::to_value(&map_to_save.npcs).unwrap_or(serde_json::json!([]));
+            // tiles, spawn_points, and npcs are already serde_json::Value
+            // No need to serialize again, use them directly
 
             // Database UPSERT
             let result = sqlx::query(
@@ -553,9 +546,9 @@ async fn handle_save_map(
             .bind(&map_to_save.description)
             .bind(map_to_save.width)
             .bind(map_to_save.height)
-            .bind(&tiles_json)
-            .bind(&spawn_points_json)
-            .bind(&npcs_json)
+            .bind(&map_to_save.tiles)
+            .bind(&map_to_save.spawn_points)
+            .bind(&map_to_save.npcs)
             .execute(pool)
             .await;
 

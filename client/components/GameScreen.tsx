@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Text, ScrollView, Modal, Alert } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer, TextureLoader } from 'expo-three';
 import { Asset } from 'expo-asset';
@@ -62,7 +62,6 @@ type MapType = {
   tiles: any[];
   spawn_points: { x: number; y: number }[];
   npcs: { id: number; x: number; y: number }[];
-  monsters: { id: number; x: number; y: number }[];
 };
 
 type NpcType = {
@@ -149,6 +148,76 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   const lastMoveTime = useRef<number>(0);
   const animationFrameRef = useRef<number>(0);
 
+  // WebSocket setup
+  useEffect(() => {
+    wsRef.current = new WebSocket(WS_API);
+
+    wsRef.current.onopen = () => {
+      console.log('WebSocket connected in GameScreen');
+    };
+
+    wsRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data.type);
+
+        switch (data.type) {
+          case 'save_map_success':
+            console.log('Map saved successfully:', data.map_id);
+            Alert.alert('สำเร็จ', 'บันทึกแผนที่สำเร็จ!');
+            break;
+          case 'save_map_error':
+            console.error('Map save error:', data.message);
+            Alert.alert('ข้อผิดพลาด', data.message);
+            break;
+          case 'save_item_success':
+            console.log('Item saved successfully:', data.item_id);
+            Alert.alert('สำเร็จ', 'บันทึกไอเทมสำเร็จ!');
+            break;
+          case 'save_item_error':
+            console.error('Item save error:', data.message);
+            Alert.alert('ข้อผิดพลาด', data.message);
+            break;
+          case 'save_npc_success':
+            console.log('NPC saved successfully:', data.npc_id);
+            Alert.alert('สำเร็จ', 'บันทึก NPC สำเร็จ!');
+            break;
+          case 'save_npc_error':
+            console.error('NPC save error:', data.message);
+            Alert.alert('ข้อผิดพลาด', data.message);
+            break;
+          case 'save_skill_success':
+            console.log('Skill saved successfully:', data.skill_id);
+            Alert.alert('สำเร็จ', 'บันทึกสกิลสำเร็จ!');
+            break;
+          case 'save_skill_error':
+            console.error('Skill save error:', data.message);
+            Alert.alert('ข้อผิดพลาด', data.message);
+            break;
+          default:
+            // Handle other message types
+            break;
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    wsRef.current.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const moveInterval = setInterval(() => {
       const { x, y } = facingDir.current;
@@ -199,14 +268,17 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     const spriteId = character.sprite_id ? Number(character.sprite_id) : 1;
     const spriteAssetSource = CHARACTERS[spriteId] || CHARACTERS[1];
 
-    // Define geometry outside so render loop handles it (UV updates)
-    const geometry = new THREE.PlaneGeometry(1, 1);
+    // Sprite sheet: 128x192 pixels, 4x4 grid
+    // Each frame: 32x48 pixels (aspect ratio 2:3)
+    const spriteWidth = 32 / 48; // 0.667
+    const spriteHeight = 1;
+    const geometry = new THREE.PlaneGeometry(spriteWidth, spriteHeight);
 
     try {
       console.log('Loading sprite asset...', spriteId);
       const keys = Object.keys(CHARACTERS);
       for (const item of keys) {
-        const asset = Asset.fromModule(spriteAssetSource);
+        const asset = Asset.fromModule(CHARACTERS[Number(item)]);
         await asset.downloadAsync();
         console.log('Sprite asset downloaded:', asset.localUri);
       }
@@ -232,7 +304,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       console.error('Error loading sprite:', e);
     }
 
-    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(25, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
     camera.lookAt(0, 0, 0);
 
@@ -387,6 +459,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     // Send to server via WebSocket
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'save_map', map }));
+      setShowMapList(false);
     }
     setShowEditMap(false);
   };
@@ -501,6 +574,35 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         </View>
       </Modal>
 
+      {/* List Modals */}
+      <ItemList
+        visible={showItemList}
+        onClose={() => setShowItemList(false)}
+        onEditItem={handleEditItem}
+        wsRef={wsRef}
+      />
+
+      <SkillList
+        visible={showSkillList}
+        onClose={() => setShowSkillList(false)}
+        onEditSkill={handleEditSkill}
+        wsRef={wsRef}
+      />
+
+      <NpcList
+        visible={showNpcList}
+        onClose={() => setShowNpcList(false)}
+        onEditNpc={handleEditNpc}
+        wsRef={wsRef}
+      />
+
+      <MapList
+        visible={showMapList}
+        onClose={() => setShowMapList(false)}
+        onEditMap={handleEditMap}
+        wsRef={wsRef}
+      />
+
       {/* Edit Modals */}
       <EditItemModal
         visible={showEditItem}
@@ -534,34 +636,6 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         mode={skillEditMode}
       />
 
-      {/* List Modals */}
-      <ItemList
-        visible={showItemList}
-        onClose={() => setShowItemList(false)}
-        onEditItem={handleEditItem}
-        wsRef={wsRef}
-      />
-
-      <SkillList
-        visible={showSkillList}
-        onClose={() => setShowSkillList(false)}
-        onEditSkill={handleEditSkill}
-        wsRef={wsRef}
-      />
-
-      <NpcList
-        visible={showNpcList}
-        onClose={() => setShowNpcList(false)}
-        onEditNpc={handleEditNpc}
-        wsRef={wsRef}
-      />
-
-      <MapList
-        visible={showMapList}
-        onClose={() => setShowMapList(false)}
-        onEditMap={handleEditMap}
-        wsRef={wsRef}
-      />
     </View>
   );
 }
