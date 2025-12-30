@@ -43,6 +43,14 @@ pub async fn admin_command_loop(
                             .execute(&pool)
                             .await;
 
+                    // อัปเดตในฐานข้อมูล
+                    let result_players =
+                        sqlx::query("UPDATE players SET role = $1::user_role WHERE username = $2")
+                            .bind(role)
+                            .bind(username)
+                            .execute(&pool)
+                            .await;
+
                     match result {
                         Ok(result) => {
                             if result.rows_affected() > 0 {

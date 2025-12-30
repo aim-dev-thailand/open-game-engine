@@ -244,6 +244,9 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       const data = JSON.parse(event.data);
       if (data.type === 'init') {
         // setMyId(data.id); // Not used
+        if (data.map) {
+          setMapData(data.map);
+        }
       } else if (data.type === 'damage') {
         addDamage(
           Dimensions.get('window').width / 2,
@@ -354,7 +357,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     playerMesh.rotation.x = -Math.PI / 4; // 45 degrees back
     scene.add(playerMesh);
 
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 10, 10);
     camera.lookAt(0, 0, 0);
 
@@ -613,7 +616,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, width: '100%', height: '100%', overflow: 'hidden' },
   glView: { flex: 1 },
   leftControls: { position: 'absolute', bottom: 50, left: 50 },
 

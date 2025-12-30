@@ -1,12 +1,12 @@
-use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub id: String,
     pub username: String,
+    pub character_name: String,
     pub x: BigDecimal,
     pub y: BigDecimal,
     pub hp: i32,

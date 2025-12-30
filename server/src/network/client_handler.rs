@@ -242,6 +242,72 @@ async fn handle_register(
     }
 }
 
+/// ตรวจสอบและสร้างแผนที่เริ่มต้นถ้ายังไม่มี
+async fn ensure_default_map(pool: &PgPool) -> Option<MapData> {
+    // เช็คว่ามีแผนที่หรือยัง
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM maps")
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0);
+
+    if count == 0 {
+        println!("ไม่พบแผนที่ สร้างแผนที่เริ่มต้น...");
+        let default_map = MapData {
+            id: Some(1),
+            name: "Default Map".to_string(),
+            description: "A starter map".to_string(),
+            width: 20,
+            height: 20,
+            tiles: serde_json::json!([]), // TODO: Generate basic tiles?
+            spawn_points: vec![serde_json::json!({"x": 10, "y": 10})],
+            npcs: vec![],
+            monsters: vec![],
+        };
+
+        let tiles_json = serde_json::to_value(&default_map.tiles).unwrap();
+        let spawn_points_json = serde_json::to_value(&default_map.spawn_points).unwrap();
+        let npcs_json = serde_json::to_value(&default_map.npcs).unwrap();
+        let monsters_json = serde_json::to_value(&default_map.monsters).unwrap();
+
+        let _ = sqlx::query(
+            "INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs, monsters) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(default_map.id)
+        .bind(&default_map.name)
+        .bind(&default_map.description)
+        .bind(default_map.width)
+        .bind(default_map.height)
+        .bind(&tiles_json)
+        .bind(&spawn_points_json)
+        .bind(&npcs_json)
+        .bind(&monsters_json)
+        .execute(pool)
+        .await;
+    }
+
+    // ดึงแผนที่แรกมา
+    let map_row = sqlx::query("SELECT id, name, description, width, height, tiles, spawn_points, npcs, monsters FROM maps ORDER BY id LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .unwrap_or(None);
+
+    if let Some(row) = map_row {
+        Some(MapData {
+            id: Some(row.get("id")),
+            name: row.get("name"),
+            description: row.get("description"),
+            width: row.get("width"),
+            height: row.get("height"),
+            tiles: row.get("tiles"),
+            spawn_points: row.get("spawn_points"),
+            npcs: row.get("npcs"),
+            monsters: row.get("monsters"),
+        })
+    } else {
+        None
+    }
+}
+
 async fn handle_login(
     ws: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     pool: &PgPool,
@@ -296,6 +362,10 @@ async fn handle_login(
                 Ok(valid) => {
                     if valid {
                         println!("ผู้ใช้เข้าสู่ระบบสำเร็จ: username={}", db_username);
+
+                        // ดึงแผนที่เริ่มต้น
+                        let default_map = ensure_default_map(pool).await;
+
                         let _ = ws
                             .send(Message::Text(
                                 serde_json::json!({
@@ -307,6 +377,20 @@ async fn handle_login(
                                 .into(),
                             ))
                             .await;
+
+                        // ส่งข้อมูล init message พร้อม map
+                        if let Some(map) = default_map {
+                            let _ = ws
+                                .send(Message::Text(
+                                    serde_json::json!({
+                                        "type": "init",
+                                        "map": map
+                                    })
+                                    .to_string()
+                                    .into(),
+                                ))
+                                .await;
+                        }
                     } else {
                         let _ = ws
                             .send(Message::Text(
@@ -907,7 +991,8 @@ async fn handle_create_character(
     let character_id = uuid::Uuid::new_v4().to_string();
     let new_player = PlayerState {
         id: character_id.clone(),
-        username: character_name.to_string(),
+        username: username.to_string(),
+        character_name: character_name.to_string(),
         x: BigDecimal::from(100),
         y: BigDecimal::from(100),
         hp: class_data.hp,
@@ -1047,26 +1132,26 @@ async fn handle_load_characters(
 
     match characters_result {
         Ok(rows) => {
-            let levels_result =
-                sqlx::query("SELECT level, exp_required FROM level_exp_table WHERE level = $1")
-                    .bind(rows[0].get::<i32, _>("level"))
-                    .fetch_all(pool)
-                    .await;
+            let levels_results = sqlx::query("SELECT level, exp_required FROM level_exp_table")
+                .fetch_all(pool)
+                .await;
 
-            let exp_required: Vec<BigDecimal> = levels_result
-                .unwrap()
-                .iter()
-                .map(|row| row.get::<BigDecimal, _>("exp_required"))
-                .collect();
-
-            if exp_required.is_empty() {
+            if levels_results.is_err() {
                 eprintln!("ไม่พบข้อมูล level_exp_table");
                 return;
             }
 
+            let levels = levels_results.unwrap();
+
             let characters: Vec<serde_json::Value> = rows
                 .iter()
                 .map(|row| {
+                    let exp_required = levels
+                        .iter()
+                        .find(|level| level.get::<i32, _>("level") == row.get::<i32, _>("level"))
+                        .map(|level| level.get::<BigDecimal, _>("exp_required"))
+                        .unwrap_or_else(|| BigDecimal::from(0));
+
                     serde_json::json!({
                         "id": row.get::<String, _>("id"),
                         "sprite_id": "1", // TODO: ดึงจากตาราง players หรือ classes
@@ -1082,7 +1167,7 @@ async fn handle_load_characters(
                         "int": row.get::<i32, _>("int"),
                         "luk": row.get::<i32, _>("luk"),
                         "exp": row.get::<i32, _>("current_exp"),
-                        "max_exp": exp_required.last().unwrap(),
+                        "max_exp": exp_required,
                         "atk": row.get::<i32, _>("base_atk"),
                         "def": row.get::<i32, _>("base_def"),
                         "accuracy": row.get::<BigDecimal, _>("accuracy"),
