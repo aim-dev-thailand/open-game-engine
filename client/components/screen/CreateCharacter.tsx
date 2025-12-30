@@ -74,15 +74,10 @@ export default function CreateCharacter({ username, onCharacterCreated, onBackTo
             }
         };
 
-        wsRef.current.onclose = () => {
-            onLogout();
-        };
-
         wsRef.current.onerror = () => {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             setIsLoading(false);
             setIsCreating(false);
-            onLogout();
         };
 
         return () => {

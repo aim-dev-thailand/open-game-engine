@@ -45,14 +45,9 @@ export default function CharacterList({ username, onSelectCharacter, onCreateNew
             }
         };
 
-        wsRef.current.onclose = () => {
-            onLogout();
-        };
-
         wsRef.current.onerror = () => {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             setIsLoading(false);
-            onLogout();
         };
 
         return () => {
