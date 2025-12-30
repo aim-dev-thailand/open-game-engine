@@ -3,8 +3,10 @@ import { EquipmentData } from "./equipment";
 export interface CharacterData {
     id: string;
     sprite_id: string;
-    character_name: string;
-    class_name: string;
+    user_id: number;
+    username: string;
+    classes_id: number;
+    classes_name: string;
     level: number;
     hp: number;
     max_hp: number;

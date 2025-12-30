@@ -476,7 +476,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       <View style={styles.userInfo}>
         <Text style={styles.userInfoText}>{username}</Text>
         <Text style={[styles.roleText, role === 'admin' && styles.adminRoleText]}>
-          {character.character_name} {role === 'admin' ? '(ผู้ดูแล)' : role === 'moderator' ? '(ผู้ควบคุม)' : '(ผู้เล่น)'}
+          {character.username}:{character.user_id} {role === 'admin' ? '(ผู้ดูแล)' : role === 'moderator' ? '(ผู้ควบคุม)' : '(ผู้เล่น)'}
         </Text>
       </View>
 

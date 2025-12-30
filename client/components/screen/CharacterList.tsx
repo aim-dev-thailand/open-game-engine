@@ -109,10 +109,10 @@ export default function CharacterList({ username, onSelectCharacter, onCreateNew
                                                 </View>
                                                 <View style={{ width: '75%' }}>
                                                     <View style={styles.characterHeader}>
-                                                        <Text style={[styles.characterName, isLandscape && styles.characterNameLandscape]}>{character.character_name}</Text>
+                                                        <Text style={[styles.characterName, isLandscape && styles.characterNameLandscape]}>{character.username}</Text>
                                                         <Text style={[styles.characterLevel, isLandscape && styles.characterLevelLandscape]}>Lv. {character.level}</Text>
                                                     </View>
-                                                    <Text style={[styles.characterClass, isLandscape && styles.characterClassLandscape]}>{character.class_name}</Text>
+                                                    <Text style={[styles.characterClass, isLandscape && styles.characterClassLandscape]}>{character.classes_name}</Text>
                                                     <View style={[styles.hpBar, isLandscape && styles.hpBarLandscape]}>
                                                         <View style={[styles.hpBarFill, { width: `${(character.hp / character.max_hp) * 100}%` }]} />
                                                         <Text style={[styles.hpText, isLandscape && styles.hpTextLandscape]}>HP: {character.hp}/{character.max_hp}</Text>

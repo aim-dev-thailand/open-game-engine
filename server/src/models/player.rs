@@ -5,8 +5,8 @@ use std::time::Instant;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub id: String,
+    pub user_id: i32,
     pub username: String,
-    pub character_name: String,
     pub x: BigDecimal,
     pub y: BigDecimal,
     pub hp: i32,

@@ -987,12 +987,35 @@ async fn handle_create_character(
         }
     };
 
+    let users_result = sqlx::query("SELECT id FROM users WHERE username = $1")
+        .bind(&username)
+        .fetch_one(pool)
+        .await;
+
+    let user_id = match users_result {
+        Ok(user) => user.get::<i32, _>("id"),
+        Err(e) => {
+            eprintln!("Error fetching user ID: {}", e);
+            let _ = ws
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "create_character_error",
+                        "message": "ไม่พบข้อมูลผู้ใช้"
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+            return;
+        }
+    };
+
     // สร้างตัวละครใหม่
     let character_id = uuid::Uuid::new_v4().to_string();
     let new_player = PlayerState {
         id: character_id.clone(),
-        username: username.to_string(),
-        character_name: character_name.to_string(),
+        user_id: user_id,
+        username: character_name.to_string(),
         x: BigDecimal::from(100),
         y: BigDecimal::from(100),
         hp: class_data.hp,
@@ -1041,7 +1064,7 @@ async fn handle_create_character(
     let insert_result = sqlx::query(
         r#"
         INSERT INTO players (
-            id, username, x, y, hp, max_hp, mp, max_mp,
+            id, user_id, username, x, y, hp, max_hp, mp, max_mp,
             base_atk, base_def, move_speed, accuracy, evasion, crit_rate,
             str, dex, agi, int, luk, vit,
             level, current_exp, stat_points, skill_points,
@@ -1051,6 +1074,7 @@ async fn handle_create_character(
         "#
     )
     .bind(&new_player.id)
+    .bind(&new_player.user_id)
     .bind(&new_player.username)
     .bind(&new_player.x)
     .bind(&new_player.y)
@@ -1125,7 +1149,7 @@ async fn handle_load_characters(
     // ในอนาคตควรกรองด้วย username หรือ user_id แต่ตอนนี้ดึงทั้งหมดตาม logic เดิม
 
     let characters_result = sqlx::query(
-        "SELECT id, username, level, hp, max_hp, str, dex, agi, vit, int, luk, current_exp, stat_points, skill_points, base_atk, base_def, accuracy, evasion, crit_rate, move_speed FROM players",
+        "SELECT id, user_id, classes_id, username, level, hp, max_hp, str, dex, agi, vit, int, luk, current_exp, stat_points, skill_points, base_atk, base_def, accuracy, evasion, crit_rate, move_speed FROM players",
     )
     .fetch_all(pool)
     .await;
@@ -1141,7 +1165,17 @@ async fn handle_load_characters(
                 return;
             }
 
+            let classes_result = sqlx::query("SELECT id, name, sprite_id FROM classes")
+                .fetch_all(pool)
+                .await;
+
+            if classes_result.is_err() {
+                eprintln!("ไม่พบข้อมูล classes");
+                return;
+            }
+
             let levels = levels_results.unwrap();
+            let classes = classes_result.unwrap();
 
             let characters: Vec<serde_json::Value> = rows
                 .iter()
@@ -1152,11 +1186,27 @@ async fn handle_load_characters(
                         .map(|level| level.get::<BigDecimal, _>("exp_required"))
                         .unwrap_or_else(|| BigDecimal::from(0));
 
+                    let classes_id = row.get::<Option<i32>, _>("classes_id").unwrap_or(1);
+
+                    let classes_name = classes
+                        .iter()
+                        .find(|class| class.get::<i32, _>("id") == classes_id)
+                        .map(|class| class.get::<String, _>("name"))
+                        .unwrap_or_else(|| "นักพจญภัย".to_string());
+
+                    let sprite_id = classes
+                        .iter()
+                        .find(|class| class.get::<i32, _>("id") == classes_id)
+                        .map(|class| class.get::<String, _>("sprite_id"))
+                        .unwrap_or_else(|| "1".to_string());
+
                     serde_json::json!({
                         "id": row.get::<String, _>("id"),
-                        "sprite_id": "1", // TODO: ดึงจากตาราง players หรือ classes
-                        "character_name": row.get::<String, _>("username"),
-                        "class_name": "นักพจญภัย", // TODO: จอยตาราง classes เพื่อดึงชื่ออาชีพ
+                        "sprite_id": sprite_id,
+                        "user_id": row.get::<i32, _>("user_id"),
+                        "username": row.get::<String, _>("username"),
+                        "classes_id": classes_id,
+                        "classes_name": classes_name,
                         "level": row.get::<i32, _>("level"),
                         "hp": row.get::<i32, _>("hp"),
                         "max_hp": row.get::<i32, _>("max_hp"),
