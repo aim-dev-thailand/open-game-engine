@@ -462,23 +462,12 @@ async fn handle_move(
         println!("Player found! Moving dx={}, dy={}, speed={}", dx, dy, speed);
 
         if dx != 0.0 || dy != 0.0 {
-            // Calculate new position: current + (direction * speed)
-            // Scaling speed? Maybe speed is units per move packet.
-            // Client sends packet every 100ms.
-            // If speed is e.g. 5.0, that's 5 tiles per tick? Might be too fast.
-            // Or speed is units/sec?
-            // Let's assume speed is "pixels/units per tick" for now or just multiply directly.
+            // Reduce speed by 4x to make movement slower
+            let speed_factor = BigDecimal::from_f64(0.25).unwrap(); // 1/4 of original speed
+            let adjusted_speed = &speed * speed_factor;
 
-            // Adjust speed factor if needed. For now direct multiply.
-            let move_x = BigDecimal::from_f64(dx).unwrap_or_default() * &speed;
-            let move_y = BigDecimal::from_f64(dy).unwrap_or_default() * &speed; // y is inverted? usually Joypad Up is -y in screen coords, but 3D world z?
-            // Let's assume standard logic: +y is up/down as defined.
-            // In GameScreen 3D: z is depth. x is horizontal.
-            // tiles use x, y (which maps to x, z in 3D usually).
-            // client logic: mesh.position.set(tile.x, 0, tile.y);
-            // So server y -> client z.
-            // Joypad y -> Forward/Back -> +y/-y.
-            // Let's just add to p.y.
+            let move_x = BigDecimal::from_f64(dx).unwrap_or_default() * &adjusted_speed;
+            let move_y = BigDecimal::from_f64(dy).unwrap_or_default() * &adjusted_speed;
 
             p.x += move_x;
             p.y += move_y;
@@ -1398,10 +1387,23 @@ async fn handle_select_character(
 
             println!("Character {} selected and added to PlayersMap", character_id_string);
 
+            // Send initial position to client
+            let x_f64 = player_state.x.to_string().parse::<f64>().unwrap_or(0.0);
+            let y_f64 = player_state.y.to_string().parse::<f64>().unwrap_or(0.0);
+
             let _ = ws.send(Message::Text(
                 serde_json::json!({
                     "type": "select_character_success",
                     "character_id": character_id
+                }).to_string().into()
+            )).await;
+
+            // Send initial position update
+            let _ = ws.send(Message::Text(
+                serde_json::json!({
+                    "type": "position_update",
+                    "x": x_f64,
+                    "y": y_f64
                 }).to_string().into()
             )).await;
         }

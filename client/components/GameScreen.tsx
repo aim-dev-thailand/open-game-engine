@@ -123,9 +123,12 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   const rendererRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
   const playerMeshRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
   const mapMeshesRef = useRef<any[]>([]);
+  const mapDataRef = useRef<MapType | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
   const facingDir = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const targetPosition = useRef<{ x: number; z: number }>({ x: 8, z: 8 }); // Target position for smooth movement
 
   const [damages, setDamages] = useState<DamageType[]>([]);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
@@ -230,6 +233,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               console.log('Loading first map:', firstMap);
               console.log('Map tiles count:', firstMap.tiles?.length || 0);
               console.log('First few tiles:', firstMap.tiles?.slice(0, 3));
+              mapDataRef.current = firstMap;
               setMapData(firstMap);
             } else {
               console.warn('No maps received from server');
@@ -240,21 +244,33 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             // Single map loaded
             if (data.map) {
               console.log('Map loaded:', data.map);
+              mapDataRef.current = data.map;
               setMapData(data.map);
             }
             break;
           }
           case 'position_update': {
-            // Update player position from server
-            if (playerMeshRef.current && data.x !== undefined && data.y !== undefined) {
-              // Server sends x, y -> map to 3D world (x, 0, z)
-              // Server y corresponds to client z (depth)
-              playerMeshRef.current.position.x = data.x;
-              playerMeshRef.current.position.z = data.y;
-              console.log('Player position updated:', { x: data.x, z: data.y });
+            // Update target position from server (will be smoothly interpolated)
+            if (data.x !== undefined && data.y !== undefined) {
+              const currentMapData = mapDataRef.current;
+
+              // Clamp position to map bounds if mapData exists
+              let clampedX = data.x;
+              let clampedZ = data.y;
+
+              if (currentMapData) {
+                // Clamp to map boundaries (0 to width-1, 0 to height-1)
+                clampedX = Math.max(0, Math.min(currentMapData.width - 1, data.x));
+                clampedZ = Math.max(0, Math.min(currentMapData.height - 1, data.y));
+              }
+
+              // Update target position for smooth interpolation
+              targetPosition.current.x = clampedX;
+              targetPosition.current.z = clampedZ;
+
+              console.log('Target position updated:', { x: clampedX, z: clampedZ });
             } else {
               console.warn('Position update failed:', {
-                hasMesh: !!playerMeshRef.current,
                 x: data.x,
                 y: data.y
               });
@@ -441,7 +457,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     scene.background = new THREE.Color(0x222222);
     sceneRef.current = scene;
 
-    const grid = new THREE.GridHelper(1000, 50, 0x444444, 0x111111);
+    const grid = new THREE.GridHelper(1000, 25, 0x444444, 0x111111);
     scene.add(grid);
 
     const spriteId = character.sprite_id ? Number(character.sprite_id) : 1;
@@ -483,11 +499,36 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       });
 
       const playerMesh = new THREE.Mesh(geometry, material);
-      playerMesh.position.y = 0.5;
-      playerMesh.rotation.x = -Math.PI / 4;
+
+      // Set initial position from spawn point if available, otherwise center of map
+      let startX = 8;
+      let startZ = 8;
+
+      if (mapData) {
+        if (mapData.spawn_points && mapData.spawn_points.length > 0) {
+          // Use first spawn point if available
+          startX = mapData.spawn_points[0].x;
+          startZ = mapData.spawn_points[0].y;
+          console.log('Using spawn point:', { x: startX, z: startZ });
+        } else {
+          // Use center of map if no spawn points
+          startX = Math.floor(mapData.width / 2);
+          startZ = Math.floor(mapData.height / 2);
+          console.log('Using map center:', { x: startX, z: startZ, width: mapData.width, height: mapData.height });
+        }
+      }
+
+      // Set both current and target position
+      playerMesh.position.set(startX, 0.5, startZ);
+      targetPosition.current.x = startX;
+      targetPosition.current.z = startZ;
+
+      // For top-down view, sprite should be parallel to ground and face up
+      playerMesh.rotation.x = -Math.PI / 2; // Rotate to lay flat
+      playerMesh.rotation.z = 0; // Face camera
       scene.add(playerMesh);
       playerMeshRef.current = playerMesh;
-      console.log('Player mesh added to scene');
+      console.log('Player mesh added to scene at:', { x: startX, z: startZ });
 
       // Render map tiles if mapData exists
       if (mapData && mapData.tiles && Array.isArray(mapData.tiles)) {
@@ -550,14 +591,63 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       console.error('Error loading sprite:', e);
     }
 
-    const camera = new THREE.PerspectiveCamera(25, width / height, 0.1, 1000);
-    camera.position.set(0, 10, 10);
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+
+    // Set camera for top-down view (directly above the starting position)
+    let camStartX = 8;
+    let camStartZ = 8;
+
+    if (mapData) {
+      if (mapData.spawn_points && mapData.spawn_points.length > 0) {
+        // Use first spawn point if available
+        camStartX = mapData.spawn_points[0].x;
+        camStartZ = mapData.spawn_points[0].y;
+      } else {
+        // Use center of map if no spawn points
+        camStartX = Math.floor(mapData.width / 2);
+        camStartZ = Math.floor(mapData.height / 2);
+      }
+    }
+
+    camera.position.set(camStartX, 15, camStartZ); // Directly above player
+    camera.lookAt(camStartX, 0, camStartZ);
+    cameraRef.current = camera; // Store camera reference for tracking player
 
     let lastRow = 0; // 0: Down, 1: Left, 2: Right, 3: Up
 
     const render = () => {
       animationFrameRef.current = requestAnimationFrame(render);
+
+      // Smooth position interpolation (lerp)
+      if (playerMeshRef.current) {
+        const currentX = playerMeshRef.current.position.x;
+        const currentZ = playerMeshRef.current.position.z;
+        const targetX = targetPosition.current.x;
+        const targetZ = targetPosition.current.z;
+
+        // Lerp factor (0.15 = smooth, higher = faster)
+        const lerpFactor = 0.2;
+
+        // Interpolate position
+        playerMeshRef.current.position.x += (targetX - currentX) * lerpFactor;
+        playerMeshRef.current.position.z += (targetZ - currentZ) * lerpFactor;
+
+        // Update camera to follow player smoothly (position only, no rotation)
+        if (cameraRef.current) {
+          const cameraHeight = 15;
+          const camTargetX = playerMeshRef.current.position.x;
+          const camTargetZ = playerMeshRef.current.position.z;
+
+          // Smoothly move camera position
+          cameraRef.current.position.x += (camTargetX - cameraRef.current.position.x) * lerpFactor;
+          cameraRef.current.position.z += (camTargetZ - cameraRef.current.position.z) * lerpFactor;
+          cameraRef.current.position.y = cameraHeight;
+
+          // Keep camera looking straight down (no rotation/angle change)
+          // lookAt current camera x,z position but at ground level (y=0)
+          cameraRef.current.lookAt(cameraRef.current.position.x, 0, cameraRef.current.position.z);
+        }
+      }
 
       // Animation Logic
       const { x, y } = facingDir.current;
@@ -571,12 +661,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           row = x > 0 ? 2 : 1; // Right : Left
         } else {
           // Vertical
-          row = y > 0 ? 0 : 3; // Down (y>0 in joypad usually means down visually on screen? Joypad.tsx: dy. usually down is +dy in RN panresponder) -> User says "Down -> Row 0".
-          // Verify Joypad: dy positive is down on screen.
-          // Wait, server map: y+ might be up or down?
-          // Usually 3D world: x, z. 
-          // Let's assume standard Joypad: +y is down. "Drag joypad down" -> +y.
-          // User: "Drag down -> Show Row 0".
+          row = y > 0 ? 0 : 3; // Down : Up
         }
         lastRow = row;
       }
