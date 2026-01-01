@@ -1067,34 +1067,79 @@ async fn handle_load_characters(
     // For simplicity, maybe client sends username?
     let username = data["username"].as_str().unwrap_or("");
     if !username.is_empty() {
-        let characters = sqlx::query_as::<_, CharacterData>(
-            r#"
-                SELECT 
-                    p.id, p.username, p.level, p.current_exp, 
-                    p.x, p.y, p.map_id,
-                    p.hp, p.max_hp, p.mp, p.max_mp,
-                    p.str, p.dex, p.agi, p.int, p.luk, p.vit,
-                    p.move_speed,
-                    p.stat_points, p.skill_points,
-                    c.sprite_id
-                FROM players p
-                LEFT JOIN classes c ON p.classes_id = c.id
-                WHERE p.username = $1
-                "#,
-        )
-        .bind(username)
-        .fetch_all(pool)
-        .await
-        .unwrap_or(vec![]);
+        // Get User ID from username
+        let user_id_opt: Option<i32> =
+            sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+                .bind(username)
+                .fetch_optional(pool)
+                .await
+                .unwrap_or(None);
 
-        let _ = tx.send(Message::Text(
-            serde_json::json!({
-                "type": "characters_data",
-                "characters": characters
-            })
-            .to_string()
-            .into(),
-        ));
+        println!(
+            "Loading characters for username: '{}', user_id: {:?}",
+            username, user_id_opt
+        );
+
+        if let Some(user_id) = user_id_opt {
+            let result = sqlx::query_as::<_, CharacterData>(
+                r#"
+            SELECT 
+                p.id, p.username, p.level, p.current_exp, 
+                p.x, p.y, p.map_id,
+                p.hp, p.max_hp, p.mp, p.max_mp,
+                p.str, p.dex, p.agi, p.int, p.luk, p.vit,
+                p.move_speed,
+                p.stat_points, p.skill_points,
+                c.sprite_id
+            FROM players p
+            LEFT JOIN classes c ON p.classes_id = c.id
+            WHERE p.user_id = $1
+            "#,
+            )
+            .bind(user_id)
+            .fetch_all(pool)
+            .await;
+
+            match result {
+                Ok(characters) => {
+                    println!(
+                        "Found {} characters for user_id {}",
+                        characters.len(),
+                        user_id
+                    );
+                    let _ = tx.send(Message::Text(
+                        serde_json::json!({
+                            "type": "characters_data",
+                            "characters": characters
+                        })
+                        .to_string()
+                        .into(),
+                    ));
+                }
+                Err(e) => {
+                    println!("Failed to load characters for user_id {}: {}", user_id, e);
+                    // Send error to client so we can debug
+                    let _ = tx.send(Message::Text(
+                        serde_json::json!({
+                            "type": "load_characters_error",
+                            "message": format!("DB Error: {}", e)
+                        })
+                        .to_string()
+                        .into(),
+                    ));
+                }
+            }
+        } else {
+            println!("User not found for username: {}", username);
+            let _ = tx.send(Message::Text(
+                serde_json::json!({
+                    "type": "characters_data",
+                    "characters": []
+                })
+                .to_string()
+                .into(),
+            ));
+        }
     }
 }
 
