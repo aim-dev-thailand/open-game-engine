@@ -130,6 +130,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   const facingDir = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const targetPosition = useRef<{ x: number; z: number }>({ x: 8, z: 8 }); // Target position for smooth movement
 
+  // Multiplayer refs
+  const otherPlayersRef = useRef<Map<string, { mesh: THREE.Mesh, target: { x: number, z: number }, lastUpdate: number }>>(new Map());
+  const myPlayerIdRef = useRef<string>("");
+
   const [damages, setDamages] = useState<DamageType[]>([]);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
 
@@ -184,11 +188,15 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       }
       // Request map data on connection
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        // If character has a map_id, we can request that specific map or rely on server
+        // Currently server sends ALL maps on 'load_map'
+        // But for optimization we might want to just load the current map
+        // For now, we still call 'load_map' but handle the response differently
         wsRef.current.send(JSON.stringify({ type: 'load_map' }));
       }
     };
 
-    wsRef.current.onmessage = (event) => {
+    wsRef!.current!.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log('WebSocket message received:', data.type);
@@ -227,14 +235,15 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             Alert.alert('ข้อผิดพลาด', data.message);
             break;
           case 'maps_loaded': {
-            // Load the first map or a specific map for the game
+            // Load the map corresponding to player's map_id
             if (data.maps && data.maps.length > 0) {
-              const firstMap = data.maps[0];
-              console.log('Loading first map:', firstMap);
-              console.log('Map tiles count:', firstMap.tiles?.length || 0);
-              console.log('First few tiles:', firstMap.tiles?.slice(0, 3));
-              mapDataRef.current = firstMap;
-              setMapData(firstMap);
+              // Find the map that matches character.map_id or default to the first one
+              const targetMapId = character.map_id || 1;
+              const targetMap = data.maps.find((m: MapType) => m.id === targetMapId) || data.maps[0];
+
+              console.log('Loading map:', targetMap.name, 'ID:', targetMap.id);
+              mapDataRef.current = targetMap;
+              setMapData(targetMap);
             } else {
               console.warn('No maps received from server');
             }
@@ -252,6 +261,62 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           case 'position_update': {
             // Update target position from server (will be smoothly interpolated)
             if (data.x !== undefined && data.y !== undefined) {
+              const pId = data.player_id ? data.player_id.toString() : "";
+
+              // If it's another player
+              if (pId && pId !== myPlayerIdRef.current) {
+                const others = otherPlayersRef.current;
+                if (!others.has(pId)) {
+                  // New player discovered! Create mesh
+                  console.log('New player joined:', pId, data.sprite_id);
+                  if (sceneRef.current) {
+                    const spriteWidth = 32 / 48; // 0.667
+                    const spriteHeight = 1;
+                    const geometry = new THREE.PlaneGeometry(spriteWidth, spriteHeight);
+                    // Default material (white) or load texture
+                    const material = new THREE.MeshBasicMaterial({
+                      color: 0xffffff,
+                      transparent: true,
+                      side: THREE.DoubleSide
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.rotation.x = -Math.PI / 2;
+                    mesh.position.set(data.x, 0.5, data.y); // Set Y to 0.5 to be above ground
+
+                    // Load texture if sprite_id available
+                    if (data.sprite_id) {
+                      const sId = Number(data.sprite_id) || 1;
+                      const assetSource = CHARACTERS[sId] || CHARACTERS[1];
+                      const asset = Asset.fromModule(assetSource);
+                      const textureLoader = new TextureLoader();
+                      // Use async load but we are in event handler
+                      // TextureLoader.load is usually async in Three.js but in Expo might need asset download
+                      // Ideally pre-load. For now just try load.
+                      asset.downloadAsync().then(() => {
+                        const texture = textureLoader.load(asset);
+                        texture.magFilter = THREE.NearestFilter;
+                        texture.minFilter = THREE.NearestFilter;
+                        material.map = texture;
+                        material.needsUpdate = true;
+                      });
+                    }
+
+                    sceneRef.current.add(mesh);
+                    others.set(pId, { mesh, target: { x: data.x, z: data.y }, lastUpdate: Date.now() });
+                  }
+                }
+
+                // Update target
+                const other = others.get(pId);
+                if (other) {
+                  other.target.x = data.x;
+                  other.target.z = data.y;
+                  other.lastUpdate = Date.now();
+                }
+                return; // Done handling other player
+              }
+
+              // Local player logic (existing)
               const currentMapData = mapDataRef.current;
 
               // Clamp position to map bounds if mapData exists
@@ -277,8 +342,28 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             }
             break;
           }
+          case 'player_left': {
+            const lId = data.player_id ? data.player_id.toString() : "";
+            if (lId && otherPlayersRef.current.has(lId)) {
+              console.log('Player left:', lId);
+              const p = otherPlayersRef.current.get(lId);
+              if (p && sceneRef.current) {
+                sceneRef.current.remove(p.mesh);
+                p.mesh.geometry.dispose();
+                if (p.mesh.material instanceof THREE.Material) {
+                  p.mesh.material.dispose();
+                }
+              }
+              otherPlayersRef.current.delete(lId);
+            }
+            break;
+          }
           case 'select_character_success':
             console.log('Character selected successfully:', data.character_id);
+            if (data.player_id) {
+              myPlayerIdRef.current = data.player_id.toString();
+              console.log('My Player ID set to:', myPlayerIdRef.current);
+            }
             break;
           case 'select_character_error':
             console.error('Character selection error:', data.message);
@@ -500,23 +585,22 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
       const playerMesh = new THREE.Mesh(geometry, material);
 
-      // Set initial position from spawn point if available, otherwise center of map
-      let startX = 8;
-      let startZ = 8;
+      // Set initial position from saved character position
+      let startX = character.x !== undefined ? Number(character.x) : 8;
+      let startZ = character.y !== undefined ? Number(character.y) : 8;
 
-      if (mapData) {
+      // Fallback: If position is 0,0 (new char?), maybe use map spawn
+      if (startX === 0 && startZ === 0 && mapData) {
         if (mapData.spawn_points && mapData.spawn_points.length > 0) {
-          // Use first spawn point if available
           startX = mapData.spawn_points[0].x;
           startZ = mapData.spawn_points[0].y;
-          console.log('Using spawn point:', { x: startX, z: startZ });
         } else {
-          // Use center of map if no spawn points
           startX = Math.floor(mapData.width / 2);
           startZ = Math.floor(mapData.height / 2);
-          console.log('Using map center:', { x: startX, z: startZ, width: mapData.width, height: mapData.height });
         }
       }
+
+      console.log('Initial player position:', { x: startX, z: startZ });
 
       // Set both current and target position
       playerMesh.position.set(startX, 0.5, startZ);
@@ -609,8 +693,16 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       }
     }
 
-    camera.position.set(camStartX, 15, camStartZ); // Directly above player
-    camera.lookAt(camStartX, 0, camStartZ);
+    // Set both current and target position
+    // camera.position.set(camStartX, 15, camStartZ); // Directly above player
+
+    // Fix: Set fixed rotation instead of using lookAt to avoid gimbal lock/rotation issues
+    camera.rotation.order = 'YXZ';
+    camera.rotation.x = -Math.PI / 2;
+    camera.rotation.y = 0;
+    camera.rotation.z = 0;
+
+    camera.position.set(camStartX, 15, camStartZ);
     cameraRef.current = camera; // Store camera reference for tracking player
 
     let lastRow = 0; // 0: Down, 1: Left, 2: Right, 3: Up
@@ -632,6 +724,17 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         playerMeshRef.current.position.x += (targetX - currentX) * lerpFactor;
         playerMeshRef.current.position.z += (targetZ - currentZ) * lerpFactor;
 
+        // Render other players
+        otherPlayersRef.current.forEach(p => {
+          const px = p.mesh.position.x;
+          const pz = p.mesh.position.z;
+          const tx = p.target.x;
+          const tz = p.target.z;
+
+          p.mesh.position.x += (tx - px) * lerpFactor;
+          p.mesh.position.z += (tz - pz) * lerpFactor;
+        });
+
         // Update camera to follow player smoothly (position only, no rotation)
         if (cameraRef.current) {
           const cameraHeight = 15;
@@ -644,8 +747,8 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           cameraRef.current.position.y = cameraHeight;
 
           // Keep camera looking straight down (no rotation/angle change)
-          // lookAt current camera x,z position but at ground level (y=0)
-          cameraRef.current.lookAt(cameraRef.current.position.x, 0, cameraRef.current.position.z);
+          // Removed lookAt to prevent rotation
+          // cameraRef.current.lookAt(cameraRef.current.position.x, 0, cameraRef.current.position.z);
         }
       }
 
@@ -1026,20 +1129,20 @@ const styles = StyleSheet.create({
   },
 
   // Map Info
-  mapInfo: { 
-    position: 'absolute', 
-    top: 12, 
-    left: 200, 
-    backgroundColor: 'white', 
-    paddingVertical: 4, 
-    paddingHorizontal: 12, 
+  mapInfo: {
+    position: 'absolute',
+    top: 12,
+    left: 200,
+    backgroundColor: 'white',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
     borderRadius: 8,
     width: 200,
     alignItems: 'center',
   },
-  mapInfoText: { 
-    color: 'black', 
-    fontSize: 14, 
+  mapInfoText: {
+    color: 'black',
+    fontSize: 14,
     fontWeight: 'bold',
   },
 

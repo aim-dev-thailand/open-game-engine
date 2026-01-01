@@ -74,6 +74,7 @@ CREATE TABLE players (
     classes_id INT REFERENCES classes(id), -- ย้ายมาไว้ที่นี่เลย
 
     -- Character Stats
+    map_id INT DEFAULT 1 REFERENCES maps(id),
     x NUMERIC(8, 2) DEFAULT 0,
     y NUMERIC(8, 2) DEFAULT 0,
     hp INT DEFAULT 100,

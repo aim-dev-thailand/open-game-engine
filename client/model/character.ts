@@ -8,6 +8,9 @@ export interface CharacterData {
     classes_id: number;
     classes_name: string;
     level: number;
+    map_id: number;
+    x: number;
+    y: number;
     hp: number;
     max_hp: number;
     str: number;

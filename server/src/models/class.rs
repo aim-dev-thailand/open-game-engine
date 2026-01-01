@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ClassData {
     pub id: Option<i32>,
     pub name: String,
@@ -13,13 +13,11 @@ pub struct ClassData {
     pub quest_id: Option<i32>,
 
     // Base Stats
-    #[serde(rename = "str")]
-    pub strength: i32,
+    pub str: i32,
     pub dex: i32,
     pub agi: i32,
     pub vit: i32,
-    #[serde(rename = "int")]
-    pub intelligence: i32,
+    pub int: i32,
     pub luk: i32,
 
     // Combat Stats

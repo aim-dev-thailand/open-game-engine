@@ -15,6 +15,8 @@ use dashmap::DashMap;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
 
 // Type aliases สำหรับ shared state
 type PlayersMap = Arc<DashMap<String, PlayerState>>;
@@ -37,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let npcs: NpcsMap = Arc::new(DashMap::new());
     let classes: ClassesMap = Arc::new(DashMap::new());
     let skills: SkillsMap = Arc::new(DashMap::new());
+    let active_connections: ActiveConnections = Arc::new(DashMap::new());
 
     // สร้างงานพื้นหลัง - บันทึกข้อมูล
     let pool_clone = pool.clone();
@@ -96,6 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let npcs_ref = npcs.clone();
         let classes_ref = classes.clone();
         let skills_ref = skills.clone();
+        let active_connections_ref = active_connections.clone();
 
         tokio::spawn(async move {
             handle_client(
@@ -107,6 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 npcs_ref,
                 classes_ref,
                 skills_ref,
+                active_connections_ref,
             )
             .await;
         });

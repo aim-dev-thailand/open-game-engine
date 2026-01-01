@@ -12,3 +12,10 @@ pub use map::*;
 pub use npc::*;
 pub use player::*;
 pub use skill::*;
+
+use dashmap::DashMap;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
+
+pub type ActiveConnections = Arc<DashMap<String, (mpsc::UnboundedSender<Message>, String)>>;

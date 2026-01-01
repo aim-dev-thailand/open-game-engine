@@ -1,4 +1,4 @@
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -7,6 +7,8 @@ pub struct PlayerState {
     pub id: String,
     pub user_id: i32,
     pub username: String,
+    pub character_id: i32, // Added to track which character is loaded
+    pub map_id: i32,
     pub x: BigDecimal,
     pub y: BigDecimal,
     pub hp: i32,
@@ -23,12 +25,10 @@ pub struct PlayerState {
     pub crit_rate: BigDecimal,
 
     // Primary Stats (สถานะหลัก)
-    #[serde(rename = "str")]
-    pub strength: i32, // Strength - เพิ่มพลังโจมตีกายภาพ
+    pub str: i32, // Strength - เพิ่มพลังโจมตีกายภาพ
     pub dex: i32, // Dexterity - เพิ่มความแม่นยำและโจมตีทางไกล
     pub agi: i32, // Agility - เพิ่มอัตราหลบหลีกและความเร็ว
-    #[serde(rename = "int")]
-    pub intelligence: i32, // Intelligence - เพิ่มพลังโจมตีเวทย์และ MP
+    pub int: i32, // Intelligence - เพิ่มพลังโจมตีเวทย์และ MP
     pub luk: i32, // Luck - เพิ่มอัตราคริติคอลและ drop rate
     pub vit: i32, // Vitality - เพิ่มพลังชีวิตและป้องกัน
 
@@ -37,18 +37,64 @@ pub struct PlayerState {
     pub current_exp: i32,
     pub stat_points: i32,
     pub skill_points: i32,
+    pub exp: i32, // Added for compatibility/alias if needed, but logic uses current_exp
 
     pub role: String,
+    pub sprite_id: String, // Added sprite_id
     pub learned_skills: Vec<i32>,
     pub active_statuses: Vec<ActiveStatus>,
     pub equipment: EquipmentState,
 }
 
+impl Default for PlayerState {
+    fn default() -> Self {
+        Self {
+            id: "".to_string(),
+            user_id: 0,
+            username: "".to_string(),
+            character_id: 0,
+            map_id: 0,
+            x: BigDecimal::from(0),
+            y: BigDecimal::from(0),
+            hp: 100,
+            max_hp: 100,
+            mp: 50,
+            max_mp: 50,
+            base_atk: 10,
+            base_def: 5,
+            move_speed: BigDecimal::from(4),
+            accuracy: BigDecimal::from(20),
+            evasion: BigDecimal::from(5),
+            crit_rate: BigDecimal::from_f32(0.05).unwrap(),
+            str: 5,
+            dex: 5,
+            agi: 5,
+            int: 5,
+            luk: 5,
+            vit: 5,
+            level: 1,
+            current_exp: 0,
+            stat_points: 0,
+            skill_points: 0,
+            exp: 0,
+            role: "player".to_string(),
+            sprite_id: "1".to_string(), // Default sprite
+            learned_skills: vec![],
+            active_statuses: vec![],
+            equipment: EquipmentState {
+                main_hand: None,
+                off_hand: None,
+            },
+        }
+    }
+}
+
+// ... existing impl PlayerState ...
 impl PlayerState {
     /// คำนวณ stats จาก primary stats
     pub fn calculate_total_atk(&self) -> i32 {
         // ATK = base_atk + (STR * 2) + (DEX * 0.5)
-        self.base_atk + (self.strength * 2) + (self.dex / 2)
+        self.base_atk + (self.str * 2) + (self.dex / 2)
     }
 
     pub fn calculate_total_def(&self) -> i32 {
@@ -63,7 +109,7 @@ impl PlayerState {
 
     pub fn calculate_total_mp(&self) -> i32 {
         // MP = max_mp + (INT * 5)
-        self.max_mp + (self.intelligence * 5)
+        self.max_mp + (self.int * 5)
     }
 
     pub fn calculate_accuracy(&self) -> BigDecimal {
@@ -143,11 +189,11 @@ impl PlayerState {
         }
 
         match stat_type.to_lowercase().as_str() {
-            "str" => self.strength += amount,
+            "str" => self.str += amount,
             "dex" => self.dex += amount,
             "agi" => self.agi += amount,
             "int" => {
-                self.intelligence += amount;
+                self.int += amount;
                 // อัปเดต MP เมื่อเพิ่ม INT
                 let new_max_mp = self.calculate_total_mp();
                 let mp_diff = new_max_mp - self.max_mp;
@@ -182,4 +228,58 @@ pub struct ActiveStatus {
     pub status_type: String, // "blind", "stun", etc.
     #[serde(skip)]
     pub expiry: Option<Instant>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CharacterData {
+    pub id: String, // Changed from Option<i32> to String
+    pub username: String,
+    pub level: i32,
+    pub current_exp: i32, // Changed from exp to match DB
+    #[sqlx(default)]
+    pub x: BigDecimal,
+    #[sqlx(default)]
+    pub y: BigDecimal,
+    #[sqlx(default)]
+    pub hp: i32,
+    #[sqlx(default)]
+    pub max_hp: i32,
+    #[sqlx(default)]
+    pub mp: i32,
+    #[sqlx(default)]
+    pub max_mp: i32,
+    pub str: i32,
+    #[sqlx(default)]
+    pub dex: i32,
+    #[sqlx(default)]
+    pub agi: i32,
+    pub int: i32,
+    #[sqlx(default)]
+    pub luk: i32,
+    #[sqlx(default)]
+    pub vit: i32,
+    #[sqlx(default)]
+    pub move_speed: BigDecimal, // DB is NUMERIC
+    #[sqlx(default)]
+    pub map_id: i32,
+    #[sqlx(default)] // DB doesn't have sprite_id in players??
+    // Check schema again.
+    // players table does NOT have sprite_id.
+    // classes table has sprite_id.
+    // players has classes_id.
+    // So we need to JOIN classes to get sprite_id?
+    // Or maybe sprite_id is in players but I missed it?
+    // checking schema...
+    // players table: lines 69-107.
+    // No sprite_id.
+    // It has classes_id.
+    // classes table: line 38: sprite_id VARCHAR(5).
+
+    // So I need a JOIN query to get sprite_id!
+    // For now I will set it as default in struct and handle logic later or add to struct as field that won't be filled by simple SELECT *.
+    // But since I use FromRow, I can aliases in query.
+    pub sprite_id: Option<String>,
+
+    pub stat_points: i32,
+    pub skill_points: i32,
 }
