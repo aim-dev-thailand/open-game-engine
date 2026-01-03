@@ -9,17 +9,43 @@ type JoypadProps = {
 
 const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
     const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null);
 
     const panResponder = PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: (_evt, gestureState) => {
+            // เก็บตำแหน่งเริ่มต้นเมื่อผู้ใช้กด
+            setStartPosition({ x: gestureState.x0, y: gestureState.y0 });
+            setPosition({ x: 0, y: 0 });
+        },
         onPanResponderMove: (_evt, gestureState) => {
-            const x = Math.max(-1, Math.min(1, gestureState.dx / 50));
-            const y = Math.max(-1, Math.min(1, gestureState.dy / 50));
-            setPosition({ x: gestureState.dx, y: gestureState.dy });
-            onMove(x, y);
+            if (!startPosition) return;
+            
+            // คำนวณระยะทางจากจุดเริ่มต้น (ใช้ dx, dy จาก gestureState)
+            const dx = gestureState.dx;
+            const dy = gestureState.dy;
+            
+            // คำนวณค่า normalized (-1 ถึง 1) สำหรับการส่งไปยัง server
+            const maxDistance = 50;
+            const normalizedX = Math.max(-1, Math.min(1, dx / maxDistance));
+            const normalizedY = Math.max(-1, Math.min(1, dy / maxDistance));
+            
+            // จำกัดระยะทางการแสดงผลของ knob
+            const maxKnobDistance = 30;
+            const clampedDx = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dx));
+            const clampedDy = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dy));
+            
+            setPosition({ x: clampedDx, y: clampedDy });
+            onMove(normalizedX, normalizedY);
         },
         onPanResponderRelease: () => {
             setPosition({ x: 0, y: 0 });
+            setStartPosition(null);
+            onStop();
+        },
+        onPanResponderTerminate: () => {
+            setPosition({ x: 0, y: 0 });
+            setStartPosition(null);
             onStop();
         },
     });

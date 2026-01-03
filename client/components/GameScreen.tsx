@@ -423,6 +423,46 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     return () => clearInterval(moveInterval);
   }, [username, character.id]);
 
+  // Update player position when mapData is loaded
+  useEffect(() => {
+    console.log('Player position update useEffect triggered');
+    console.log('playerMeshRef.current:', !!playerMeshRef.current);
+    console.log('mapData:', mapData);
+    console.log('character position:', { x: character.x, y: character.y });
+
+    if (!playerMeshRef.current || !mapData) {
+      console.warn('Player mesh or mapData not ready yet');
+      return;
+    }
+
+    // Calculate correct starting position
+    let startX = character.x !== undefined ? Number(character.x) : 8;
+    let startZ = character.y !== undefined ? Number(character.y) : 8;
+
+    // Fallback: If position is 0,0 (new char?), use map spawn
+    if (startX === 0 && startZ === 0) {
+      if (mapData.spawn_points && mapData.spawn_points.length > 0) {
+        startX = mapData.spawn_points[0].x;
+        startZ = mapData.spawn_points[0].y;
+      } else {
+        startX = Math.floor(mapData.width / 2);
+        startZ = Math.floor(mapData.height / 2);
+      }
+    }
+
+    console.log('Updating player position to:', { x: startX, z: startZ });
+
+    // Update both current position and target position
+    playerMeshRef.current.position.set(startX, 0.5, startZ);
+    targetPosition.current.x = startX;
+    targetPosition.current.z = startZ;
+
+    // Also update camera to follow the new position
+    if (cameraRef.current) {
+      cameraRef.current.position.set(startX, 15, startZ);
+    }
+  }, [mapData, character.x, character.y]);
+
   // Update map tiles when mapData changes
   useEffect(() => {
     console.log('Map tiles useEffect triggered');
