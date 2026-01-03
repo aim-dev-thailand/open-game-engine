@@ -14,6 +14,11 @@ type MapTileType = {
   tileset_id?: number;
   tileX?: number;
   tileY?: number;
+  ground_layer?: {
+    tileset_id: number;
+    tileX: number;
+    tileY: number;
+  };
 };
 
 type MapType = {
@@ -133,6 +138,21 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
   const updateTile = (x: number, y: number) => {
     const updatedTiles = formData.tiles.map(tile => {
       if (tile.x === x && tile.y === y) {
+
+        let ground_layer = tile.ground_layer;
+
+        if (selectedTileType !== 'ground') {
+          if (tile.type === 'ground' && tile.tileset_id && tile.tileX !== undefined && tile.tileY !== undefined) {
+            ground_layer = {
+              tileset_id: tile.tileset_id,
+              tileX: tile.tileX,
+              tileY: tile.tileY
+            };
+          }
+        } else {
+          ground_layer = undefined;
+        }
+
         return {
           ...tile,
           type: selectedTileType,
@@ -140,6 +160,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
           tileset_id: selectedTileset,
           tileX: selectedTileX,
           tileY: selectedTileY,
+          ground_layer: ground_layer,
         };
       }
       return tile;
@@ -186,6 +207,73 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
     } catch {
       return null;
     }
+  };
+
+  const fillAllTiles = () => {
+    Alert.alert(
+      'ยืนยันการทำทั้งหมด',
+      'คุณต้องการเปลี่ยน Tiles ทั้งหมดในแผนที่ให้เป็นแบบที่เลือกใช่หรือไม่?',
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ยืนยัน',
+          onPress: () => {
+            const updatedTiles = formData.tiles.map(tile => {
+              let ground_layer = tile.ground_layer;
+
+              if (selectedTileType !== 'ground') {
+                if (tile.type === 'ground' && tile.tileset_id && tile.tileX !== undefined && tile.tileY !== undefined) {
+                  ground_layer = {
+                    tileset_id: tile.tileset_id,
+                    tileX: tile.tileX,
+                    tileY: tile.tileY
+                  };
+                }
+              } else {
+                ground_layer = undefined;
+              }
+
+              return {
+                ...tile,
+                type: selectedTileType,
+                walkable: selectedTileType === 'ground',
+                tileset_id: selectedTileset,
+                tileX: selectedTileX,
+                tileY: selectedTileY,
+                ground_layer: ground_layer,
+              };
+            });
+            setFormData(prev => ({ ...prev, tiles: updatedTiles }));
+          }
+        }
+      ]
+    );
+  };
+
+  const clearMap = () => {
+    Alert.alert(
+      'ยืนยันการเคลียร์',
+      'คุณต้องการลบข้อมูล Tiles ทั้งหมดให้เป็นค่าเริ่มต้นใช่หรือไม่?',
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        {
+          text: 'ยืนยัน',
+          style: 'destructive',
+          onPress: () => {
+            const updatedTiles = formData.tiles.map(tile => ({
+              ...tile,
+              type: 'ground' as const,
+              walkable: true,
+              tileset_id: selectedTileset,
+              tileX: undefined,
+              tileY: undefined,
+              ground_layer: undefined,
+            }));
+            setFormData(prev => ({ ...prev, tiles: updatedTiles }));
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -412,6 +500,20 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
             )}
 
             <View style={styles.section}>
+              <View style={styles.row}>
+                <TouchableOpacity
+                  style={[styles.generateButton, { flex: 1, backgroundColor: '#22c55e' }]}
+                  onPress={fillAllTiles}
+                >
+                  <Text style={styles.generateButtonText}>ทำทั้งหมด</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.generateButton, { flex: 1, backgroundColor: '#ff4757' }]}
+                  onPress={clearMap}
+                >
+                  <Text style={styles.generateButtonText}>เคลียร์แผนที่</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={styles.sectionTitle}>ตัวแก้ไข Tiles</Text>
             </View>
 
@@ -447,7 +549,43 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                         ]}
                         onPress={() => updateTile(tile.x, tile.y)}
                       >
-                        {tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) ? (
+                        {/* 1. Render Ground Layer (under object) */}
+                        {tile.type !== 'ground' && tile.ground_layer && tile.ground_layer.tileset_id && getTilesetImageSource(tile.ground_layer.tileset_id) && (
+                          <View style={{ position: 'absolute', width: 32, height: 32, overflow: 'hidden', zIndex: 0 }}>
+                            <Image
+                              source={getTilesetImageSource(tile.ground_layer.tileset_id)!}
+                              style={{
+                                width: 512,
+                                height: 512,
+                                transform: [
+                                  { translateX: -(tile.ground_layer.tileX || 0) * 32 },
+                                  { translateY: -(tile.ground_layer.tileY || 0) * 32 }
+                                ]
+                              }}
+                            />
+                          </View>
+                        )}
+
+                        {/* 2. Render Object Layer */}
+                        {tile.type !== 'ground' && tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) && (
+                          <View style={{ position: 'absolute', width: 32, height: 32, overflow: 'hidden', zIndex: 1 }}>
+                            <Image
+                              source={getTilesetImageSource(tile.tileset_id)!}
+                              style={{
+                                backgroundColor: 'transparent',
+                                width: 512,
+                                height: 512,
+                                transform: [
+                                  { translateX: -(tile.tileX || 0) * 32 },
+                                  { translateY: -(tile.tileY || 0) * 32 }
+                                ]
+                              }}
+                            />
+                          </View>
+                        )}
+
+                        {/* 3. Render Ground Tile (Normal) */}
+                        {tile.type === 'ground' && tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) ? (
                           <View style={{ width: 32, height: 32, overflow: 'hidden' }}>
                             <Image
                               source={getTilesetImageSource(tile.tileset_id)!}
@@ -462,7 +600,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                             />
                           </View>
                         ) : (
-                          <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
+                          (tile.type === 'ground' && (!tile.tileX || !tile.tileY)) && <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
                         )}
                       </TouchableOpacity>
                     </React.Fragment>

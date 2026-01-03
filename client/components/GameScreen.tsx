@@ -63,6 +63,11 @@ type MapTileType = {
   tileset_id?: number;
   tileX?: number;
   tileY?: number;
+  ground_layer?: {
+    tileset_id: number;
+    tileX: number;
+    tileY: number;
+  };
 };
 
 type MapType = {
@@ -275,7 +280,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             console.log('My player ID:', myPlayerIdRef.current);
             console.log('Message player ID:', data.player_id);
             console.log('Is my player?', data.player_id === myPlayerIdRef.current);
-            
+
             // Update target position from server (will be smoothly interpolated)
             if (data.x !== undefined && data.y !== undefined) {
               const pId = data.player_id ? data.player_id.toString() : "";
@@ -420,7 +425,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     const moveInterval = setInterval(() => {
       const { x, y } = facingDir.current;
       console.log('Move interval check:', { x, y, playerId: myPlayerIdRef.current });
-      
+
       // ตรวจสอบว่ามีการเคลื่อนที่ (x หรือ y ไม่เท่ากับ 0)
       // ใช้ threshold แทนการเปรียบเทียบแบบเท่ากับพอดี เพื่อหลีกเลี่ยงปัญหา floating point
       const threshold = 0.0001; // ลด threshold ลงอีกเพื่อให้ Joypad ทำงานได้ง่ายขึ้น
@@ -432,12 +437,12 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       const now = Date.now();
       const timeSinceLastMove = now - lastMoveTime.current;
       console.log('Time since last move:', timeSinceLastMove);
-      
+
       if (timeSinceLastMove > 100) {
         // ตรวจสอบว่ามี player_id ที่ถูกต้องจาก server แล้วหรือยัง
         const currentPlayerId = myPlayerIdRef.current;
         console.log('Current player ID:', currentPlayerId);
-        
+
         if (!currentPlayerId || currentPlayerId.trim().length === 0) {
           console.warn('Player ID not set yet, cannot send move command');
           return;
@@ -445,7 +450,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
         console.log('WebSocket ref:', wsRef.current);
         console.log('WebSocket readyState:', wsRef.current?.readyState);
-        
+
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           const moveMsg = {
             type: 'move',
@@ -539,17 +544,9 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       let skippedTiles = 0;
       let renderedTiles = 0;
 
-      mapData.tiles.forEach((tile: any, index: number) => {
-        if (!tile.tileset_id || tile.tileX === undefined || tile.tileY === undefined) {
-          skippedTiles++;
-          if (index < 3) {
-            console.log(`Skipping tile ${index}:`, tile);
-          }
-          return;
-        }
-
+      const createTileMesh = (tid: number, tx: number, ty: number, x: number, y: number, yOffset: number) => {
         try {
-          const tilesetSource = TILESETS[tile.tileset_id];
+          const tilesetSource = TILESETS[tid];
           if (!tilesetSource) return;
 
           const tileAsset = Asset.fromModule(tilesetSource);
@@ -561,10 +558,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           const tilesetHeight = 512;
           const tilePixelSize = 32;
 
-          const uLeft = (tile.tileX * tilePixelSize) / tilesetWidth;
-          const uRight = ((tile.tileX + 1) * tilePixelSize) / tilesetWidth;
-          const vBottom = 1 - ((tile.tileY + 1) * tilePixelSize) / tilesetHeight;
-          const vTop = 1 - (tile.tileY * tilePixelSize) / tilesetHeight;
+          const uLeft = (tx * tilePixelSize) / tilesetWidth;
+          const uRight = ((tx + 1) * tilePixelSize) / tilesetWidth;
+          const vBottom = 1 - ((ty + 1) * tilePixelSize) / tilesetHeight;
+          const vTop = 1 - (ty * tilePixelSize) / tilesetHeight;
 
           const tileGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
           const uvs = tileGeometry.attributes.uv;
@@ -581,21 +578,36 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           });
 
           const tileMesh = new THREE.Mesh(tileGeometry, tileMaterial);
-          tileMesh.position.set(tile.x * tileSize, 0, tile.y * tileSize);
+          tileMesh.position.set(x * tileSize, yOffset, y * tileSize);
           tileMesh.rotation.x = -Math.PI / 2;
           sceneRef.current?.add(tileMesh);
           mapMeshesRef.current.push(tileMesh);
           renderedTiles++;
-
-          if (renderedTiles <= 3) {
-            console.log(`Rendered tile ${renderedTiles}:`, {
-              position: { x: tile.x, y: tile.y },
-              tileset: tile.tileset_id,
-              tileCoords: { x: tile.tileX, y: tile.tileY }
-            });
-          }
         } catch (e) {
-          console.error('Error rendering tile:', tile, e);
+          console.error('Error creating tile mesh:', e);
+        }
+      };
+
+      mapData.tiles.forEach((tile: any, index: number) => {
+        if (!tile.tileset_id || tile.tileX === undefined || tile.tileY === undefined) {
+          skippedTiles++;
+          return;
+        }
+
+        // Render ground layer if exists
+        if (tile.type !== 'ground' && tile.ground_layer && tile.ground_layer.tileset_id) {
+          createTileMesh(tile.ground_layer.tileset_id, tile.ground_layer.tileX, tile.ground_layer.tileY, tile.x, tile.y, 0);
+        }
+
+        // Render main layer
+        const yOffset = (tile.type !== 'ground' && tile.ground_layer) ? 0.05 : 0;
+        createTileMesh(tile.tileset_id, tile.tileX, tile.tileY, tile.x, tile.y, yOffset);
+
+        if (renderedTiles <= 3) {
+          console.log(`Rendered tile ${renderedTiles}:`, {
+            position: { x: tile.x, y: tile.y },
+            tileset: tile.tileset_id,
+          });
         }
       });
 
@@ -807,12 +819,12 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         // Interpolate position
         const newX = currentX + (targetX - currentX) * lerpFactor;
         const newZ = currentZ + (targetZ - currentZ) * lerpFactor;
-        
+
         // Log only if there's significant movement
         if (Math.abs(newX - currentX) > 0.001 || Math.abs(newZ - currentZ) > 0.001) {
           console.log('Lerping position:', { currentX, currentZ, targetX, targetZ, newX, newZ });
         }
-        
+
         playerMeshRef.current.position.x = newX;
         playerMeshRef.current.position.z = newZ;
 
