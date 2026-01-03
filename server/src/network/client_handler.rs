@@ -61,9 +61,13 @@ pub async fn handle_client(
                         }
                         Some("move") => {
                             let pid = data["player_id"].as_str().unwrap_or("").to_string();
-                            if pid == player_id || (!player_id.is_empty() && pid.is_empty()) {
+                            // ตรวจสอบว่า player_id ต้องไม่ว่างและต้องตรงกับที่ลงทะเบียนไว้
+                            println!("Move command received: player_id={}, pid={}, match={}", player_id, pid, pid == player_id);
+                            if !player_id.is_empty() && pid == player_id {
                                 handle_move(&tx, &player_id, &players, &active_connections, &data)
                                     .await;
+                            } else {
+                                println!("Move command rejected: player_id is empty or doesn't match");
                             }
                         }
                         Some("attack") => {
@@ -87,7 +91,7 @@ pub async fn handle_client(
                             handle_save_skill(&tx, &skills, &data).await;
                         }
                         Some("save_map") => {
-                            handle_save_map(&tx, &pool, &maps, &data).await;
+                            handle_save_map(&tx, &pool, &maps, &active_connections, &data).await;
                         }
                         Some("load_item") => {
                             handle_load_items(&tx, &items).await;
@@ -499,12 +503,12 @@ async fn handle_move(
         return;
     }
 
-    // println!("handle_move called for player_id: {}", player_id);
+    println!("handle_move called for player_id: {}", player_id);
     if let Some(mut p) = players.get_mut(player_id) {
         let dx = data["x"].as_f64().unwrap_or(0.0);
         let dy = data["y"].as_f64().unwrap_or(0.0);
         let speed = p.move_speed.clone();
-        // println!("Player found! Moving dx={}, dy={}, speed={}", dx, dy, speed);
+        println!("Player found! Moving dx={}, dy={}, speed={}", dx, dy, speed);
 
         if dx != 0.0 || dy != 0.0 {
             // Reduce speed by 4x to make movement slower
@@ -582,6 +586,7 @@ async fn handle_save_map(
     tx: &mpsc::UnboundedSender<Message>,
     pool: &PgPool,
     maps: &MapsMap,
+    active_connections: &ActiveConnections,
     data: &serde_json::Value,
 ) {
     if let Some(map_data) = data.get("map") {
@@ -624,9 +629,9 @@ async fn handle_save_map(
 
             match result {
                 Ok(_) => {
-                    maps.insert(id, map_to_save);
+                    maps.insert(id, map_to_save.clone());
                     println!("บันทึกแผนที่: {}", map_name);
-
+                    
                     let _ = tx.send(Message::Text(
                         serde_json::json!({
                             "type": "save_map_success",
@@ -636,6 +641,19 @@ async fn handle_save_map(
                         .to_string()
                         .into(),
                     ));
+                    
+                    // Broadcast map reload to all players on this map
+                    let reload_msg = serde_json::json!({
+                        "type": "reload_map",
+                        "map_id": id,
+                        "map": map_to_save
+                    }).to_string();
+                    
+                    // Send to all active connections
+                    for entry in active_connections.iter() {
+                        let (other_tx, _) = entry.value();
+                        let _ = other_tx.send(Message::Text(reload_msg.clone().into()));
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error saving map to DB: {:?}", e);

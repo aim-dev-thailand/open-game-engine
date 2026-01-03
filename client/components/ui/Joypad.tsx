@@ -15,6 +15,7 @@ const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: (_evt, gestureState) => {
             // เก็บตำแหน่งเริ่มต้นเมื่อผู้ใช้กด
+            console.log('Joypad onPanResponderGrant:', { x0: gestureState.x0, y0: gestureState.y0 });
             setStartPosition({ x: gestureState.x0, y: gestureState.y0 });
             setPosition({ x: 0, y: 0 });
         },
@@ -26,26 +27,39 @@ const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
             const dy = gestureState.dy;
             
             // คำนวณค่า normalized (-1 ถึง 1) สำหรับการส่งไปยัง server
-            const maxDistance = 50;
+            const maxDistance = 20; // ลดจาก 50 เป็น 20 เพื่อให้ sensitive มากขึ้น
             const normalizedX = Math.max(-1, Math.min(1, dx / maxDistance));
             const normalizedY = Math.max(-1, Math.min(1, dy / maxDistance));
             
+            console.log('Joypad move:', { normalizedX, normalizedY, dx, dy, maxDistance });
+            
             // จำกัดระยะทางการแสดงผลของ knob
-            const maxKnobDistance = 250;
+            const maxKnobDistance = 50; // ลดจาก 250 เป็น 50 เพื่อให้ควบคุมได้ง่าย
             const clampedDx = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dx));
             const clampedDy = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dy));
             
             setPosition({ x: clampedDx, y: clampedDy });
-            onMove(normalizedX, normalizedY);
+            
+            // ส่งค่าเสมอ ไม่ว่าจะเล็กแค่ไหน
+            if (Math.abs(normalizedX) > 0.001 || Math.abs(normalizedY) > 0.001) {
+                console.log('Calling onMove with:', { normalizedX, normalizedY });
+                onMove(normalizedX, normalizedY);
+            } else {
+                console.log('Not calling onMove - values too small:', { normalizedX, normalizedY });
+            }
         },
         onPanResponderRelease: () => {
+            console.log('Joypad onPanResponderRelease');
             setPosition({ x: 0, y: 0 });
             setStartPosition(null);
+            console.log('Calling onStop');
             onStop();
         },
         onPanResponderTerminate: () => {
+            console.log('Joypad onPanResponderTerminate');
             setPosition({ x: 0, y: 0 });
             setStartPosition(null);
+            console.log('Calling onStop from terminate');
             onStop();
         },
     });

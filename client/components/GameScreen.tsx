@@ -202,6 +202,18 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         console.log('WebSocket message received:', data.type);
 
         switch (data.type) {
+          case 'reload_map': {
+            console.log('Map reload request:', data.map_id);
+            if (data.map && data.map_id) {
+              // Check if this map is the same as current map
+              if (mapDataRef.current && mapDataRef.current.id === data.map_id) {
+                console.log('Reloading current map:', data.map_id);
+                mapDataRef.current = data.map;
+                setMapData(data.map);
+              }
+            }
+            break;
+          }
           case 'save_map_success':
             console.log('Map saved successfully:', data.map_id);
             Alert.alert('สำเร็จ', 'บันทึกแผนที่สำเร็จ!');
@@ -259,6 +271,11 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             break;
           }
           case 'position_update': {
+            console.log('Received position_update:', data);
+            console.log('My player ID:', myPlayerIdRef.current);
+            console.log('Message player ID:', data.player_id);
+            console.log('Is my player?', data.player_id === myPlayerIdRef.current);
+            
             // Update target position from server (will be smoothly interpolated)
             if (data.x !== undefined && data.y !== undefined) {
               const pId = data.player_id ? data.player_id.toString() : "";
@@ -317,6 +334,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               }
 
               // Local player logic (existing)
+              console.log('Processing local player position update');
               const currentMapData = mapDataRef.current;
 
               // Clamp position to map bounds if mapData exists
@@ -330,9 +348,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               }
 
               // Update target position for smooth interpolation
+              console.log('Before update - targetPosition:', targetPosition.current);
               targetPosition.current.x = clampedX;
               targetPosition.current.z = clampedZ;
-
+              console.log('After update - targetPosition:', targetPosition.current);
               console.log('Target position updated:', { x: clampedX, z: clampedZ });
             } else {
               console.warn('Position update failed:', {
@@ -360,9 +379,12 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           }
           case 'select_character_success':
             console.log('Character selected successfully:', data.character_id);
+            console.log('Full select_character_success data:', JSON.stringify(data));
             if (data.player_id) {
               myPlayerIdRef.current = data.player_id.toString();
               console.log('My Player ID set to:', myPlayerIdRef.current);
+            } else {
+              console.error('No player_id in select_character_success response!');
             }
             break;
           case 'select_character_error':
@@ -397,31 +419,53 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   useEffect(() => {
     const moveInterval = setInterval(() => {
       const { x, y } = facingDir.current;
-      if (x === 0 && y === 0) return;
+      console.log('Move interval check:', { x, y, playerId: myPlayerIdRef.current });
+      
+      // ตรวจสอบว่ามีการเคลื่อนที่ (x หรือ y ไม่เท่ากับ 0)
+      // ใช้ threshold แทนการเปรียบเทียบแบบเท่ากับพอดี เพื่อหลีกเลี่ยงปัญหา floating point
+      const threshold = 0.0001; // ลด threshold ลงอีกเพื่อให้ Joypad ทำงานได้ง่ายขึ้น
+      if (Math.abs(x) < threshold && Math.abs(y) < threshold) {
+        console.log('Movement below threshold, skipping:', { x, y, threshold });
+        return;
+      }
 
       const now = Date.now();
-      if (now - lastMoveTime.current > 100) {
+      const timeSinceLastMove = now - lastMoveTime.current;
+      console.log('Time since last move:', timeSinceLastMove);
+      
+      if (timeSinceLastMove > 100) {
+        // ตรวจสอบว่ามี player_id ที่ถูกต้องจาก server แล้วหรือยัง
+        const currentPlayerId = myPlayerIdRef.current;
+        console.log('Current player ID:', currentPlayerId);
+        
+        if (!currentPlayerId || currentPlayerId.trim().length === 0) {
+          console.warn('Player ID not set yet, cannot send move command');
+          return;
+        }
+
+        console.log('WebSocket ref:', wsRef.current);
+        console.log('WebSocket readyState:', wsRef.current?.readyState);
+        
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          // Normalize vector if needed, or just send raw values
-          // Server expects x, y delta or absolute?
-          // Usually 'move' implies delta or direction.
-          // client_handler.rs handle_move adds x*speed, y*speed.
-          // So passing direction vector is correct.
           const moveMsg = {
             type: 'move',
-            player_id: character.id || username,
+            player_id: currentPlayerId,
             x,
             y
           };
           console.log('Sending move:', moveMsg);
           wsRef.current.send(JSON.stringify(moveMsg));
           lastMoveTime.current = now;
+        } else {
+          console.warn('WebSocket not ready, readyState:', wsRef.current?.readyState);
         }
+      } else {
+        console.log('Move rate limited, waiting...');
       }
     }, 50); // Check frequently
 
     return () => clearInterval(moveInterval);
-  }, [username, character.id]);
+  }, []); // Empty dependency array since we use refs
 
   // Update player position when mapData is loaded
   useEffect(() => {
@@ -761,8 +805,16 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         const lerpFactor = 0.2;
 
         // Interpolate position
-        playerMeshRef.current.position.x += (targetX - currentX) * lerpFactor;
-        playerMeshRef.current.position.z += (targetZ - currentZ) * lerpFactor;
+        const newX = currentX + (targetX - currentX) * lerpFactor;
+        const newZ = currentZ + (targetZ - currentZ) * lerpFactor;
+        
+        // Log only if there's significant movement
+        if (Math.abs(newX - currentX) > 0.001 || Math.abs(newZ - currentZ) > 0.001) {
+          console.log('Lerping position:', { currentX, currentZ, targetX, targetZ, newX, newZ });
+        }
+        
+        playerMeshRef.current.position.x = newX;
+        playerMeshRef.current.position.z = newZ;
 
         // Render other players
         otherPlayersRef.current.forEach(p => {
@@ -794,7 +846,9 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
       // Animation Logic
       const { x, y } = facingDir.current;
-      const isMoving = x !== 0 || y !== 0;
+      // ใช้ threshold เพื่อหลีกเลี่ยงปัญหา floating point
+      const threshold = 0.01;
+      const isMoving = Math.abs(x) >= threshold || Math.abs(y) >= threshold;
 
       // Determine Row
       let row = lastRow;
@@ -994,8 +1048,16 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
       <View style={styles.leftControls}>
         <Joypad
-          onMove={(x: number, y: number) => { facingDir.current = { x, y }; }}
-          onStop={() => { facingDir.current = { x: 0, y: 0 }; }}
+          onMove={(x: number, y: number) => {
+            console.log('GameScreen onMove:', { x, y, facingDir: facingDir.current });
+            facingDir.current = { x, y };
+            console.log('Updated facingDir:', facingDir.current);
+          }}
+          onStop={() => {
+            console.log('GameScreen onStop');
+            facingDir.current = { x: 0, y: 0 };
+            console.log('Reset facingDir to:', facingDir.current);
+          }}
         />
       </View>
 
