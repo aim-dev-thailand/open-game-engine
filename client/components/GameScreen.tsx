@@ -57,7 +57,7 @@ type MapTileType = {
   id?: number;
   x: number;
   y: number;
-  type: 'ground' | 'wall' | 'water' | 'grass' | 'road' | 'obstacle';
+  type: 'ground' | 'object-a' | 'object-b';
   walkable: boolean;
   sprite_id?: string;
   tileset_id?: number;

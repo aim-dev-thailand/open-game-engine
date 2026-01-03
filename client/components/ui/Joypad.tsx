@@ -31,7 +31,7 @@ const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
             const normalizedY = Math.max(-1, Math.min(1, dy / maxDistance));
             
             // จำกัดระยะทางการแสดงผลของ knob
-            const maxKnobDistance = 30;
+            const maxKnobDistance = 250;
             const clampedDx = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dx));
             const clampedDy = Math.max(-maxKnobDistance, Math.min(maxKnobDistance, dy));
             
@@ -62,8 +62,8 @@ const Joypad: React.FC<JoypadProps> = ({ onMove, onStop }) => {
 };
 
 const styles = StyleSheet.create({
-    container: { width: 100, height: 100, justifyContent: 'center', alignItems: 'center' },
-    base: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.2)', position: 'absolute' },
+    container: { width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
+    base: { width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.2)', position: 'absolute' },
     knob: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
 });
 

@@ -8,7 +8,7 @@ type MapTileType = {
   id?: number;
   x: number;
   y: number;
-  type: 'ground' | 'wall' | 'water' | 'grass' | 'road' | 'obstacle';
+  type: 'ground' | 'object-a' | 'object-b';
   walkable: boolean;
   sprite_id?: string;
   tileset_id?: number;
@@ -136,7 +136,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
         return {
           ...tile,
           type: selectedTileType,
-          walkable: selectedTileType !== 'wall' && selectedTileType !== 'water',
+          walkable: selectedTileType === 'ground',
           tileset_id: selectedTileset,
           tileX: selectedTileX,
           tileY: selectedTileY,
@@ -150,11 +150,8 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
   const getTileColor = (type: MapTileType['type']) => {
     const colors: { [key: string]: string } = {
       ground: '#8B7355',
-      wall: '#4a4a4a',
-      water: '#3b82f6',
-      grass: '#22c55e',
-      road: '#a8a29e',
-      obstacle: '#ef4444',
+      'object-a': '#22c55e',
+      'object-b': '#f59e0b',
     };
     return colors[type] || '#8B7355';
   };
@@ -162,11 +159,8 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
   const getTileLabel = (type: string) => {
     const labels: { [key: string]: string } = {
       ground: 'พื้นดิน',
-      wall: 'กำแพง',
-      water: 'น้ำ',
-      grass: 'หญ้า',
-      road: 'ถนน',
-      obstacle: 'สิ่งกีดขวาง',
+      'object-a': 'วัตถุ-A',
+      'object-b': 'วัตถุ-B',
     };
     return labels[type] || type;
   };
@@ -422,7 +416,7 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
             </View>
 
             <View style={styles.tileTypeContainer}>
-              {(['ground', 'wall', 'water', 'grass', 'road', 'obstacle'] as const).map((type) => (
+              {(['ground', 'object-a', 'object-b'] as const).map((type) => (
                 <TouchableOpacity
                   key={type}
                   style={[
@@ -444,32 +438,34 @@ export default function EditMapModal({ visible, onClose, map, onSave, mode }: Ed
                 <Text style={styles.label}>ตัวอย่างแผนที่ (แตะเพื่อแก้ไข tiles)</Text>
                 <View style={styles.mapGrid}>
                   {formData.tiles.map((tile, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.mapTile,
-                        { backgroundColor: getTileColor(tile.type) },
-                      ]}
-                      onPress={() => updateTile(tile.x, tile.y)}
-                    >
-                      {tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) ? (
-                        <View style={{ width: 32, height: 32, overflow: 'hidden' }}>
-                          <Image
-                            source={getTilesetImageSource(tile.tileset_id)!}
-                            style={{
-                              width: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.width : 512,
-                              height: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.height : 512,
-                              transform: [
-                                { translateX: -(tile.tileX || 0) * 32 },
-                                { translateY: -(tile.tileY || 0) * 32 }
-                              ]
-                            }}
-                          />
-                        </View>
-                      ) : (
-                        <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
-                      )}
-                    </TouchableOpacity>
+                    <React.Fragment key={index}>
+                      {tile.x === 0 && index > 0 && <View style={styles.rowBreak} />}
+                      <TouchableOpacity
+                        style={[
+                          styles.mapTile,
+                          { backgroundColor: getTileColor(tile.type) },
+                        ]}
+                        onPress={() => updateTile(tile.x, tile.y)}
+                      >
+                        {tile.tileX !== undefined && tile.tileY !== undefined && tile.tileset_id && getTilesetImageSource(tile.tileset_id) ? (
+                          <View style={{ width: 32, height: 32, overflow: 'hidden' }}>
+                            <Image
+                              source={getTilesetImageSource(tile.tileset_id)!}
+                              style={{
+                                width: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.width : 512,
+                                height: tile.tileset_id === selectedTileset && tilesetDimensions ? tilesetDimensions.height : 512,
+                                transform: [
+                                  { translateX: -(tile.tileX || 0) * 32 },
+                                  { translateY: -(tile.tileY || 0) * 32 }
+                                ]
+                              }}
+                            />
+                          </View>
+                        ) : (
+                          <Text style={styles.mapTileText}>{tile.x},{tile.y}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </React.Fragment>
                   ))}
                 </View>
               </View>
@@ -731,6 +727,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     borderColor: '#333',
+    width: '100%',
+  },
+  rowBreak: {
+    width: '100%',
+    height: 0,
   },
   mapTile: {
     width: 32,
