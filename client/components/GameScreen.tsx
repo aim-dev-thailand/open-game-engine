@@ -183,7 +183,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     wsRef.current = new WebSocket(WS_API);
 
     wsRef.current.onopen = () => {
-      console.log('WebSocket connected in GameScreen');
+
       // Select character first
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && character.id) {
         wsRef.current.send(JSON.stringify({
@@ -204,15 +204,15 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     wsRef!.current!.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data.type);
+
 
         switch (data.type) {
           case 'reload_map': {
-            console.log('Map reload request:', data.map_id);
+
             if (data.map && data.map_id) {
               // Check if this map is the same as current map
               if (mapDataRef.current && mapDataRef.current.id === data.map_id) {
-                console.log('Reloading current map:', data.map_id);
+
                 mapDataRef.current = data.map;
                 setMapData(data.map);
               }
@@ -220,7 +220,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             break;
           }
           case 'save_map_success':
-            console.log('Map saved successfully:', data.map_id);
+
             Alert.alert('สำเร็จ', 'บันทึกแผนที่สำเร็จ!');
             break;
           case 'save_map_error':
@@ -228,7 +228,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             Alert.alert('ข้อผิดพลาด', data.message);
             break;
           case 'save_item_success':
-            console.log('Item saved successfully:', data.item_id);
+
             Alert.alert('สำเร็จ', 'บันทึกไอเทมสำเร็จ!');
             break;
           case 'save_item_error':
@@ -236,7 +236,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             Alert.alert('ข้อผิดพลาด', data.message);
             break;
           case 'save_npc_success':
-            console.log('NPC saved successfully:', data.npc_id);
+
             Alert.alert('สำเร็จ', 'บันทึก NPC สำเร็จ!');
             break;
           case 'save_npc_error':
@@ -244,7 +244,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             Alert.alert('ข้อผิดพลาด', data.message);
             break;
           case 'save_skill_success':
-            console.log('Skill saved successfully:', data.skill_id);
+
             Alert.alert('สำเร็จ', 'บันทึกสกิลสำเร็จ!');
             break;
           case 'save_skill_error':
@@ -258,7 +258,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               const targetMapId = character.map_id || 1;
               const targetMap = data.maps.find((m: MapType) => m.id === targetMapId) || data.maps[0];
 
-              console.log('Loading map:', targetMap.name, 'ID:', targetMap.id);
+
               mapDataRef.current = targetMap;
               setMapData(targetMap);
             } else {
@@ -269,17 +269,14 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           case 'map_loaded': {
             // Single map loaded
             if (data.map) {
-              console.log('Map loaded:', data.map);
+
               mapDataRef.current = data.map;
               setMapData(data.map);
             }
             break;
           }
           case 'position_update': {
-            console.log('Received position_update:', data);
-            console.log('My player ID:', myPlayerIdRef.current);
-            console.log('Message player ID:', data.player_id);
-            console.log('Is my player?', data.player_id === myPlayerIdRef.current);
+
 
             // Update target position from server (will be smoothly interpolated)
             if (data.x !== undefined && data.y !== undefined) {
@@ -290,7 +287,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
                 const others = otherPlayersRef.current;
                 if (!others.has(pId)) {
                   // New player discovered! Create mesh
-                  console.log('New player joined:', pId, data.sprite_id);
+
                   if (sceneRef.current) {
                     const spriteWidth = 32 / 48; // 0.667
                     const spriteHeight = 1;
@@ -339,7 +336,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               }
 
               // Local player logic (existing)
-              console.log('Processing local player position update');
+
               const currentMapData = mapDataRef.current;
 
               // Clamp position to map bounds if mapData exists
@@ -353,11 +350,9 @@ export default function GameScreen({ username, character, onLogout, role = 'user
               }
 
               // Update target position for smooth interpolation
-              console.log('Before update - targetPosition:', targetPosition.current);
               targetPosition.current.x = clampedX;
               targetPosition.current.z = clampedZ;
-              console.log('After update - targetPosition:', targetPosition.current);
-              console.log('Target position updated:', { x: clampedX, z: clampedZ });
+
             } else {
               console.warn('Position update failed:', {
                 x: data.x,
@@ -369,7 +364,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           case 'player_left': {
             const lId = data.player_id ? data.player_id.toString() : "";
             if (lId && otherPlayersRef.current.has(lId)) {
-              console.log('Player left:', lId);
+
               const p = otherPlayersRef.current.get(lId);
               if (p && sceneRef.current) {
                 sceneRef.current.remove(p.mesh);
@@ -383,11 +378,10 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             break;
           }
           case 'select_character_success':
-            console.log('Character selected successfully:', data.character_id);
-            console.log('Full select_character_success data:', JSON.stringify(data));
+
             if (data.player_id) {
               myPlayerIdRef.current = data.player_id.toString();
-              console.log('My Player ID set to:', myPlayerIdRef.current);
+
             } else {
               console.error('No player_id in select_character_success response!');
             }
@@ -398,7 +392,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             break;
           default:
             // Handle other message types
-            console.log('Unhandled message type:', data);
+
             break;
         }
       } catch (e) {
@@ -411,7 +405,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     };
 
     wsRef.current.onclose = () => {
-      console.log('WebSocket disconnected');
+
     };
 
     return () => {
@@ -424,32 +418,31 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   useEffect(() => {
     const moveInterval = setInterval(() => {
       const { x, y } = facingDir.current;
-      console.log('Move interval check:', { x, y, playerId: myPlayerIdRef.current });
+
 
       // ตรวจสอบว่ามีการเคลื่อนที่ (x หรือ y ไม่เท่ากับ 0)
       // ใช้ threshold แทนการเปรียบเทียบแบบเท่ากับพอดี เพื่อหลีกเลี่ยงปัญหา floating point
       const threshold = 0.0001; // ลด threshold ลงอีกเพื่อให้ Joypad ทำงานได้ง่ายขึ้น
       if (Math.abs(x) < threshold && Math.abs(y) < threshold) {
-        console.log('Movement below threshold, skipping:', { x, y, threshold });
+
         return;
       }
 
       const now = Date.now();
       const timeSinceLastMove = now - lastMoveTime.current;
-      console.log('Time since last move:', timeSinceLastMove);
+
 
       if (timeSinceLastMove > 100) {
         // ตรวจสอบว่ามี player_id ที่ถูกต้องจาก server แล้วหรือยัง
         const currentPlayerId = myPlayerIdRef.current;
-        console.log('Current player ID:', currentPlayerId);
+
 
         if (!currentPlayerId || currentPlayerId.trim().length === 0) {
           console.warn('Player ID not set yet, cannot send move command');
           return;
         }
 
-        console.log('WebSocket ref:', wsRef.current);
-        console.log('WebSocket readyState:', wsRef.current?.readyState);
+
 
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           const moveMsg = {
@@ -458,14 +451,14 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             x,
             y
           };
-          console.log('Sending move:', moveMsg);
+
           wsRef.current.send(JSON.stringify(moveMsg));
           lastMoveTime.current = now;
         } else {
           console.warn('WebSocket not ready, readyState:', wsRef.current?.readyState);
         }
       } else {
-        console.log('Move rate limited, waiting...');
+
       }
     }, 50); // Check frequently
 
@@ -474,10 +467,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
   // Update player position when mapData is loaded
   useEffect(() => {
-    console.log('Player position update useEffect triggered');
-    console.log('playerMeshRef.current:', !!playerMeshRef.current);
-    console.log('mapData:', mapData);
-    console.log('character position:', { x: character.x, y: character.y });
+
 
     if (!playerMeshRef.current || !mapData) {
       console.warn('Player mesh or mapData not ready yet');
@@ -499,7 +489,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       }
     }
 
-    console.log('Updating player position to:', { x: startX, z: startZ });
+
 
     // Update both current position and target position
     playerMeshRef.current.position.set(startX, 0.5, startZ);
@@ -514,17 +504,14 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
   // Update map tiles when mapData changes
   useEffect(() => {
-    console.log('Map tiles useEffect triggered');
-    console.log('sceneRef.current:', !!sceneRef.current);
-    console.log('mapData:', mapData);
+
 
     if (!sceneRef.current || !mapData) {
       console.warn('Scene or mapData not ready yet');
       return;
     }
 
-    console.log('Updating map tiles for mapData:', mapData.name);
-    console.log('Total tiles to render:', mapData.tiles?.length || 0);
+
 
     // Clear old map meshes
     mapMeshesRef.current.forEach(mesh => {
@@ -538,13 +525,13 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
     // Render new map tiles
     if (mapData.tiles && Array.isArray(mapData.tiles)) {
-      console.log('Starting to render tiles...');
+
       const textureLoader = new TextureLoader();
       const tileSize = 1;
       let skippedTiles = 0;
       let renderedTiles = 0;
 
-      const createTileMesh = (tid: number, tx: number, ty: number, x: number, y: number, yOffset: number) => {
+      const createTileMesh = (tid: number, tx: number, ty: number, x: number, y: number, yOffset: number, type: string) => {
         try {
           const tilesetSource = TILESETS[tid];
           if (!tilesetSource) return;
@@ -580,6 +567,15 @@ export default function GameScreen({ username, character, onLogout, role = 'user
           const tileMesh = new THREE.Mesh(tileGeometry, tileMaterial);
           tileMesh.position.set(x * tileSize, yOffset, y * tileSize);
           tileMesh.rotation.x = -Math.PI / 2;
+
+          // Store metadata for dynamic rendering
+          tileMesh.userData = {
+            type: type,
+            gameX: x,
+            gameY: y,
+            originalYRequest: yOffset
+          };
+
           sceneRef.current?.add(tileMesh);
           mapMeshesRef.current.push(tileMesh);
           renderedTiles++;
@@ -596,23 +592,17 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
         // Render ground layer if exists
         if (tile.type !== 'ground' && tile.ground_layer && tile.ground_layer.tileset_id) {
-          createTileMesh(tile.ground_layer.tileset_id, tile.ground_layer.tileX, tile.ground_layer.tileY, tile.x, tile.y, 0);
+          createTileMesh(tile.ground_layer.tileset_id, tile.ground_layer.tileX, tile.ground_layer.tileY, tile.x, tile.y, 0, 'ground_layer');
         }
 
         // Render main layer
         const yOffset = (tile.type !== 'ground' && tile.ground_layer) ? 0.05 : 0;
-        createTileMesh(tile.tileset_id, tile.tileX, tile.tileY, tile.x, tile.y, yOffset);
+        createTileMesh(tile.tileset_id, tile.tileX, tile.tileY, tile.x, tile.y, yOffset, tile.type);
 
-        if (renderedTiles <= 3) {
-          console.log(`Rendered tile ${renderedTiles}:`, {
-            position: { x: tile.x, y: tile.y },
-            tileset: tile.tileset_id,
-          });
-        }
+
       });
 
-      console.log(`Map tiles rendering complete: ${renderedTiles} rendered, ${skippedTiles} skipped`);
-      console.log('Total meshes in scene:', mapMeshesRef.current.length);
+
     }
   }, [mapData]);
 
@@ -628,7 +618,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const onContextCreate = async (gl: any) => {
-    console.log('onContextCreate: started');
+
     const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
     const renderer = new Renderer({ gl });
     renderer.setSize(width, height);
@@ -651,20 +641,20 @@ export default function GameScreen({ username, character, onLogout, role = 'user
     const geometry = new THREE.PlaneGeometry(spriteWidth, spriteHeight);
 
     try {
-      console.log('Loading sprite asset...', spriteId);
+
       const charKeys = Object.keys(CHARACTERS);
       for (const item of charKeys) {
         const asset = Asset.fromModule(CHARACTERS[Number(item)]);
         await asset.downloadAsync();
-        console.log('Sprite asset downloaded:', asset.localUri);
+
       }
 
-      console.log('Loading tiles asset...', spriteId);
+
       const tileKeys = Object.keys(TILESETS);
       for (const item of tileKeys) {
         const asset = Asset.fromModule(TILESETS[Number(item)]);
         await asset.downloadAsync();
-        console.log('Sprite tiles downloaded:', asset.localUri);
+
       }
 
       const charAsset = Asset.fromModule(spriteAssetSource);
@@ -696,7 +686,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         }
       }
 
-      console.log('Initial player position:', { x: startX, z: startZ });
+
 
       // Set both current and target position
       playerMesh.position.set(startX, 0.5, startZ);
@@ -708,11 +698,11 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       playerMesh.rotation.z = 0; // Face camera
       scene.add(playerMesh);
       playerMeshRef.current = playerMesh;
-      console.log('Player mesh added to scene at:', { x: startX, z: startZ });
+
 
       // Render map tiles if mapData exists
       if (mapData && mapData.tiles && Array.isArray(mapData.tiles)) {
-        console.log('Rendering map tiles:', mapData.tiles.length);
+
         const textureLoader = new TextureLoader();
         const tileSize = 1; // Size of each tile in 3D space
 
@@ -765,7 +755,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
             console.error('Error loading tile:', tile, e);
           }
         }
-        console.log('Map tiles rendered:', mapMeshesRef.current.length);
+
       }
     } catch (e) {
       console.error('Error loading sprite:', e);
@@ -821,9 +811,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
         const newZ = currentZ + (targetZ - currentZ) * lerpFactor;
 
         // Log only if there's significant movement
-        if (Math.abs(newX - currentX) > 0.001 || Math.abs(newZ - currentZ) > 0.001) {
-          console.log('Lerping position:', { currentX, currentZ, targetX, targetZ, newX, newZ });
-        }
+
 
         playerMeshRef.current.position.x = newX;
         playerMeshRef.current.position.z = newZ;
@@ -837,6 +825,28 @@ export default function GameScreen({ username, character, onLogout, role = 'user
 
           p.mesh.position.x += (tx - px) * lerpFactor;
           p.mesh.position.z += (tz - pz) * lerpFactor;
+        });
+
+        // Dynamic Occlusion for Object-B
+        mapMeshesRef.current.forEach(mesh => {
+          if (mesh.userData && mesh.userData.type === 'object-b') {
+            // If Player Z (Game Y) <= Object Z (Game Y)
+            // Player is "behind" or "North" of the object
+            // Object should cover Player
+            if (playerMeshRef.current.position.z <= mesh.userData.gameY) {
+              mesh.renderOrder = 10;
+              if (mesh.material instanceof THREE.Material) {
+                mesh.material.depthTest = false;
+              }
+            } else {
+              // Player is "South" or "In Front"
+              // Reset to normal
+              mesh.renderOrder = 0;
+              if (mesh.material instanceof THREE.Material) {
+                mesh.material.depthTest = true;
+              }
+            }
+          }
         });
 
         // Update camera to follow player smoothly (position only, no rotation)
@@ -986,7 +996,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const handleSaveItem = (item: ItemType) => {
-    console.log('Saving item:', item);
+
     // Send to server via WebSocket
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'save_item', item }));
@@ -995,7 +1005,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const handleSaveMap = (map: MapType) => {
-    console.log('Saving map:', map);
+
     // Send to server via WebSocket
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'save_map', map }));
@@ -1005,7 +1015,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const handleSaveNpc = (npc: NpcType) => {
-    console.log('Saving npc:', npc);
+
     // Send to server via WebSocket
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'save_npc', npc }));
@@ -1014,7 +1024,7 @@ export default function GameScreen({ username, character, onLogout, role = 'user
   };
 
   const handleSaveSkill = (skill: SkillType) => {
-    console.log('Saving skill:', skill);
+
     // Send to server via WebSocket
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify({ type: 'save_skill', skill }));
@@ -1061,14 +1071,14 @@ export default function GameScreen({ username, character, onLogout, role = 'user
       <View style={styles.leftControls}>
         <Joypad
           onMove={(x: number, y: number) => {
-            console.log('GameScreen onMove:', { x, y, facingDir: facingDir.current });
+
             facingDir.current = { x, y };
-            console.log('Updated facingDir:', facingDir.current);
+
           }}
           onStop={() => {
-            console.log('GameScreen onStop');
+
             facingDir.current = { x: 0, y: 0 };
-            console.log('Reset facingDir to:', facingDir.current);
+
           }}
         />
       </View>

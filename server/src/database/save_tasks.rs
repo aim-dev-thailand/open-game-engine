@@ -41,7 +41,7 @@ async fn save_items(pool: &PgPool, items: &ItemsMap) {
         let result = sqlx::query(
             r#"
             INSERT INTO items (id, name, description, type, rarity, value, stackable, max_stack, stats)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -84,7 +84,7 @@ async fn save_maps(pool: &PgPool, maps: &MapsMap) {
         let result = sqlx::query(
             r#"
             INSERT INTO maps (id, name, description, width, height, tiles, spawn_points, npcs)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -136,7 +136,7 @@ async fn save_npcs(pool: &PgPool, npcs: &NpcsMap) {
         let result = sqlx::query(
             r#"
             INSERT INTO npcs (id, name, description, sprite_id, level, hp, max_hp, attack, defense, move_speed, is_hostile, can_trade, can_quest, dialogue, shop_items, quests, position, map_id, npc_type, crit_rate, evasion, accuracy, is_attack_first)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -206,7 +206,7 @@ async fn save_skills(pool: &PgPool, skills: &SkillsMap) {
         let result = sqlx::query(
             r#"
             INSERT INTO skills (id, name, description, icon_id, type, element, level_required, mp_cost, cooldown, cast_time, range, area_of_effect, effects, learnable_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
